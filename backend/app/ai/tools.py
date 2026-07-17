@@ -186,6 +186,15 @@ def investigate_game(game_id: str) -> dict:
     performances vs season averages, scoring runs and Q4 execution."""
     inv = game_investigation.investigate(game_id)
     inv.pop("teams", None)
+    # The detailed evidence_for arrays duplicate four_factors, star_lines, runs
+    # and q4 below. Keep summaries and counterevidence while avoiding hundreds
+    # of repeated input tokens on every game investigation.
+    inv["explanations"] = [
+        {key: explanation.get(key) for key in (
+            "key", "title", "favored", "score", "summary", "evidence_against"
+        )}
+        for explanation in inv.get("explanations", [])
+    ]
     return _round(inv)
 
 

@@ -67,9 +67,10 @@ Only needed if you move to a new computer:
 - **Data freshness**: current-season numbers refresh every 12 hours; completed
   seasons are final and cached permanently in `backend\data\cache.sqlite` (safe
   to delete if you ever want a clean re-download).
-- **AI limits**: the free Gemini tier allows a handful of questions per minute.
-  If AI Mode says it's cooling down, wait a minute and retry — the app also
-  falls back across several models automatically.
+- **AI limits**: Gemini enforces requests/minute, input tokens/minute and
+  requests/day per project; the exact active limits vary by model and are shown
+  in Google AI Studio. Successful identical questions are cached for 12 hours,
+  and the app uses one stable Flash-Lite fallback when needed.
 - **Privacy**: your Gemini key lives only in `backend\.env` on this PC and is
   never committed to git or sent anywhere except Google's API when you ask a
   question.
@@ -80,3 +81,16 @@ FastAPI + pandas backend (all statistics computed server-side), React + Vite +
 Tailwind + Recharts frontend, SQLite response cache, Google Gemini with
 function-calling for AI Mode — the model decides which analyses to run but never
 invents numbers. Full detail in [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md).
+
+## Testing AI Mode
+
+The deterministic AI eval suite checks 10 representative investigations without
+using Gemini quota:
+
+```
+backend\venv\Scripts\python.exe backend\evals\run_evals.py
+```
+
+Add `--live --limit 1` to intentionally test one real Gemini answer. Live
+results are saved and can be re-graded later without another API request. See
+**[backend/evals/README.md](backend/evals/README.md)** for details.

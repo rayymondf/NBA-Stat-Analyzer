@@ -17,6 +17,16 @@ interface Report {
   tool_trace?: { tool: string; args: Record<string, unknown> }[];
   generated_at?: string;
   model?: string;
+  cached?: boolean;
+  model_attempts?: number;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    thinking_tokens?: number;
+    tool_prompt_tokens?: number;
+    cached_input_tokens?: number;
+    total_tokens?: number;
+  };
 }
 
 interface Turn {
@@ -155,6 +165,14 @@ function ReportCard({ r }: { r: Report }) {
                 {r.tool_trace.map((t) => t.tool).join(" → ")}
               </div>
             )}
+            {r.cached && <div>Reused a cached answer · no Gemini quota used</div>}
+            {r.usage?.total_tokens != null && (
+              <div>
+                {r.cached ? "Original answer usage" : "Gemini usage"}: {r.usage.total_tokens.toLocaleString()} tokens
+                {r.usage.thinking_tokens != null && ` · ${r.usage.thinking_tokens.toLocaleString()} thinking`}
+                {r.model_attempts != null && ` · ${r.model_attempts} model attempt${r.model_attempts === 1 ? "" : "s"}`}
+              </div>
+            )}
             {r.generated_at && <div>Generated {new Date(r.generated_at).toLocaleString()} · {r.model}</div>}
           </div>
         )}
@@ -169,6 +187,7 @@ export default function AiMode() {
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const context = useRef<Record<string, unknown> | undefined>(undefined);
+  const autoSubmitted = useRef(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const mutation = useMutation({
@@ -190,7 +209,8 @@ export default function AiMode() {
   // Prefilled question coming from a player page / game page
   useEffect(() => {
     const state = location.state as { question?: string; context?: Record<string, unknown> } | null;
-    if (state?.question) {
+    if (state?.question && !autoSubmitted.current) {
+      autoSubmitted.current = true;
       context.current = state.context;
       submit(state.question);
       window.history.replaceState({}, "");

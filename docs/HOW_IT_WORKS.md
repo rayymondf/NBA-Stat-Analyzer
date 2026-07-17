@@ -86,10 +86,13 @@ counterexamples, and explain the answer.
 
 Mechanically (`backend/app/ai/`):
 
-1. Your question goes to Gemini along with **14 "tools"** — each tool is a thin
-   wrapper around one of the stats services above (`get_player_stats`,
-   `get_shot_profile`, `compare_players`, `investigate_game`, `league_query`,
-   `find_similar_players`, …).
+1. Your question goes to Gemini with the relevant subset of **14 available
+   tools** — each tool is a thin wrapper around one of the stats services above
+   (`get_player_stats`, `get_shot_profile`, `compare_players`,
+   `investigate_game`, `league_query`, `find_similar_players`, …). Explicit
+   Player, Claim, Compare and Game modes expose only the tools they can use;
+   Auto keeps the full set, except exact game-page context is safely routed to
+   Game mode.
 2. Gemini calls the tools it needs. Those tools run the **real Python
    calculations** and hand back computed JSON.
 3. Gemini writes its answer into a fixed structure: a written explanation, a
@@ -108,6 +111,12 @@ Guardrails baked into the instructions:
 - If the data is insufficient, say **"Insufficient evidence"** instead of
   guessing.
 
+Successful identical questions are cached for 12 hours, including their page
+context, mode, model and current season. Concurrent duplicates share the same
+in-progress request. This prevents refreshes and double-clicks from consuming
+the free quota twice. The response's data-scope panel also shows token use,
+model attempts and whether an answer came from this local cache.
+
 Because the model only ever repeats numbers the tools computed, you can trust the
 evidence panel — and verify it yourself by opening the same player or game.
 
@@ -116,13 +125,19 @@ evidence panel — and verify it yourself by opening the same player or game.
 Gemini's free tier has per-minute and per-day caps, and its newest models
 occasionally get overloaded. The app handles this:
 
-- It tries a primary model, then automatically falls back across
-  `gemini-flash-latest → gemini-flash-lite-latest → gemini-3.1-flash-lite`.
+- It tries the configured primary model, then the stable
+  `gemini-3.1-flash-lite` efficiency fallback.
 - If a rate limit says "retry in N seconds" and N is short, it waits and retries
   once on its own.
 - If everything is capped, you get a clear message ("wait a minute" vs "daily
   free allowance used up — resets around midnight Pacific"). All non-AI features
   keep working regardless.
+
+The app limits the final report to 1,600 output tokens and uses low thinking
+effort by default. Both are configurable in `backend/.env`. Gemini's exact
+free-tier RPM, input-token-per-minute and daily request limits vary by project
+and model, so Google AI Studio is the source of truth rather than hard-coded
+numbers in the app.
 
 The model is configured in `backend/.env` (`GEMINI_MODEL`); the key lives there
 too and never leaves your PC except to call Google's API.

@@ -1,5 +1,8 @@
+import json
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from ..ai import orchestrator
 
@@ -7,9 +10,16 @@ router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
 class AskRequest(BaseModel):
-    question: str
-    mode: str = "auto"  # auto | player | claim | compare | game
+    question: str = Field(min_length=2, max_length=500)
+    mode: Literal["auto", "player", "claim", "compare", "game"] = "auto"
     context: dict | None = None
+
+    @field_validator("context")
+    @classmethod
+    def context_must_be_small(cls, value: dict | None) -> dict | None:
+        if value is not None and len(json.dumps(value, default=str)) > 2000:
+            raise ValueError("context is too large")
+        return value
 
 
 @router.post("/ask")

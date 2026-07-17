@@ -5,17 +5,61 @@ comes from tool outputs (the app's own computed statistics). The final answer
 is a structured JSON report the frontend renders with evidence, counterevidence,
 data scope and entity links.
 """
+import hashlib
 import json
 import os
 import re
+import threading
 import time
+from copy import deepcopy
 from datetime import datetime, timezone
+from typing import Literal
 
+from pydantic import BaseModel
+
+from ..nba import cache
 from ..nba.seasons import current_season
 from . import tools
 
 VERDICTS = ["Supported", "Mostly supported", "Mixed", "Misleading",
             "Not supported", "Insufficient evidence"]
+PROMPT_VERSION = "2026-07-17.1"
+DEFAULT_CACHE_TTL_SECONDS = 12 * 3600
+DEFAULT_MAX_OUTPUT_TOKENS = 1600
+DEFAULT_MAX_REMOTE_CALLS = 6
+
+
+class Finding(BaseModel):
+    claim: str
+    evidence: str
+
+
+class DataScope(BaseModel):
+    seasons: list[str]
+    sample: str
+    definitions: list[str]
+    filters: str
+
+
+class EntityLink(BaseModel):
+    type: Literal["player", "game"]
+    id: str
+    label: str
+
+
+class ReportPayload(BaseModel):
+    """Final report shape enforced through Gemini structured output."""
+
+    answer_markdown: str
+    verdict: Literal[
+        "Supported", "Mostly supported", "Mixed", "Misleading",
+        "Not supported", "Insufficient evidence",
+    ] | None
+    key_findings: list[Finding]
+    counterevidence: list[str]
+    data_scope: DataScope
+    links: list[EntityLink]
+    confidence: Literal["high", "medium", "low"]
 
 SYSTEM_PROMPT = f"""You are the research assistant inside "NBA Stat Analyzer".
 You answer NBA questions using ONLY numbers returned by your tools — never from
@@ -42,22 +86,36 @@ Rules:
 - Keep the tone of a sharp, neutral basketball analyst. Explain advanced
   stats briefly when used (e.g. "TS% — shooting efficiency incl. 3s and FTs").
 
-After investigating, reply with ONLY a JSON object (no markdown fences):
-{{{{
-  "answer_markdown": "your full answer in markdown (2-6 short paragraphs or bullets)",
-  "verdict": "one of the verdict strings above, or null if not a claim check",
-  "key_findings": [{{{{"claim": "short statement", "evidence": "the exact numbers backing it"}}}}],
-  "counterevidence": ["honest caveats or opposing data points, [] if none"],
-  "data_scope": {{{{
-    "seasons": ["seasons analyzed"],
-    "sample": "games/players analyzed, e.g. '60 games (2025-26 regular season)'",
-    "definitions": ["stat definitions used"],
-    "filters": "filters applied, or 'none'"
-  }}}},
-  "links": [{{{{"type": "player" | "game", "id": "player_id or game_id", "label": "display name"}}}}],
-  "confidence": "high" | "medium" | "low"
-}}}}
-Include a links entry for every player and game you analyzed."""
+The response schema is enforced separately. Write 2-6 short paragraphs or
+bullets in answer_markdown, use null verdict outside claim checks, put exact
+supporting numbers in key_findings, and include honest caveats in
+counterevidence. Fully populate data_scope and include a link for every player
+and game you analyzed."""
+
+
+_TOOLS_BY_MODE = {
+    "player": [
+        tools.search_player, tools.get_player_stats,
+        tools.get_player_percentiles, tools.get_shot_profile, tools.get_trends,
+        tools.get_career, tools.find_similar_players, tools.get_game_log,
+        tools.get_on_off_impact, tools.get_previous_season,
+    ],
+    "claim": [
+        tools.search_player, tools.get_player_stats,
+        tools.get_player_percentiles, tools.get_shot_profile, tools.get_trends,
+        tools.get_career, tools.compare_players, tools.league_query,
+        tools.get_game_log, tools.get_on_off_impact, tools.get_previous_season,
+    ],
+    "compare": [
+        tools.search_player, tools.compare_players, tools.get_player_stats,
+        tools.get_player_percentiles, tools.get_shot_profile, tools.get_trends,
+        tools.get_previous_season,
+    ],
+    "game": [tools.list_games, tools.investigate_game],
+}
+
+_request_locks: dict[str, threading.Lock] = {}
+_request_locks_guard = threading.Lock()
 
 
 class AiUnavailable(Exception):
@@ -66,6 +124,79 @@ class AiUnavailable(Exception):
 
 class AiRateLimited(Exception):
     pass
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    try:
+        value = int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def tools_for_mode(mode: str) -> list:
+    """Return only the function declarations relevant to an explicit mode."""
+    return _TOOLS_BY_MODE.get(mode, tools.ALL_TOOLS)
+
+
+def _cache_key(question: str, mode: str, context: dict | None,
+               model: str) -> str:
+    normalized = {
+        "prompt_version": PROMPT_VERSION,
+        "season": current_season(),
+        "model": model,
+        "question": " ".join(question.lower().split()),
+        "mode": mode,
+        "context": context or {},
+    }
+    raw = json.dumps(normalized, sort_keys=True, separators=(",", ":"),
+                     default=str)
+    return "ai-report:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _request_lock(key: str) -> threading.Lock:
+    """Coalesce identical in-flight requests in this backend process."""
+    with _request_locks_guard:
+        return _request_locks.setdefault(key, threading.Lock())
+
+
+def _cached_report(key: str) -> dict | None:
+    if os.environ.get("AI_RESPONSE_CACHE", "1").lower() in {"0", "false", "no"}:
+        return None
+    hit = cache.get(key)
+    if not isinstance(hit, dict):
+        return None
+    report = deepcopy(hit)
+    report["cached"] = True
+    report["model_attempts"] = 0
+    report.pop("api_attempts", None)  # remove metadata from pre-upgrade cache entries
+    return report
+
+
+def _store_report(key: str, report: dict) -> None:
+    if os.environ.get("AI_RESPONSE_CACHE", "1").lower() in {"0", "false", "no"}:
+        return
+    ttl = _positive_int_env("AI_RESPONSE_CACHE_TTL", DEFAULT_CACHE_TTL_SECONDS)
+    cache.set(key, report, ttl)
+
+
+def _usage(response) -> dict:
+    """Stable, JSON-friendly subset of the SDK's usage metadata."""
+    metadata = getattr(response, "usage_metadata", None)
+    if metadata is None:
+        return {}
+    fields = {
+        "input_tokens": "prompt_token_count",
+        "output_tokens": "candidates_token_count",
+        "thinking_tokens": "thoughts_token_count",
+        "tool_prompt_tokens": "tool_use_prompt_token_count",
+        "cached_input_tokens": "cached_content_token_count",
+        "total_tokens": "total_token_count",
+    }
+    return {
+        label: value for label, attr in fields.items()
+        if (value := getattr(metadata, attr, None)) is not None
+    }
 
 
 def _client():
@@ -114,12 +245,23 @@ def _tool_trace(response) -> list[dict]:
     return trace
 
 
-def ask(question: str, mode: str = "auto",
-        context: dict | None = None) -> dict:
+def _response_text(response) -> str:
+    """Read text parts without SDK warnings about adjacent function calls."""
+    chunks: list[str] = []
+    for candidate in getattr(response, "candidates", None) or []:
+        content = getattr(candidate, "content", None)
+        for part in getattr(content, "parts", None) or []:
+            if text := getattr(part, "text", None):
+                chunks.append(text)
+    return "".join(chunks)
+
+
+def _generate_report(question: str, mode: str, context: dict | None,
+                     requested_model: str) -> dict:
     from google.genai import errors, types
 
     client = _client()
-    model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+    model = requested_model
 
     prompt_parts = [f"Investigation type: {mode}." if mode != "auto" else "",
                     f"Question: {question}"]
@@ -132,22 +274,35 @@ def ask(question: str, mode: str = "auto",
     system = SYSTEM_PROMPT.format(season=current_season(),
                                   today=datetime.now().strftime("%Y-%m-%d"))
 
-    # Primary model first, then lite fallbacks. Verified 2026-07: new free-tier
-    # accounts only have quota on current-generation models — older ones
-    # (gemini-2.x) return 404 "retired" or 429 "limit: 0", so they must NOT be
-    # in this list. The flash models 503 under global demand spikes; the lite
-    # models are the reliable fallback.
-    candidates = [model, "gemini-flash-lite-latest", "gemini-3.1-flash-lite"]
+    # Use one stable, efficient fallback. Each extra candidate can consume a
+    # separate free-tier request, so aliases and retired 2.x models are omitted.
+    candidates = [model, "gemini-3.1-flash-lite"]
+    available_tools = tools_for_mode(mode)
+    max_remote_calls = _positive_int_env(
+        "AI_MAX_REMOTE_CALLS", DEFAULT_MAX_REMOTE_CALLS)
+    max_output_tokens = _positive_int_env(
+        "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS)
+    thinking_level = os.environ.get("AI_THINKING_LEVEL", "low").lower()
+    if thinking_level not in {"minimal", "low", "medium", "high"}:
+        thinking_level = "low"
+    model_attempts = 0
 
     def _attempt(candidate: str):
+        nonlocal model_attempts
+        model_attempts += 1
         return client.models.generate_content(
             model=candidate,
             contents=prompt,
             config=types.GenerateContentConfig(
                 system_instruction=system,
-                tools=tools.ALL_TOOLS,
+                tools=available_tools,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                    maximum_remote_calls=6),
+                    maximum_remote_calls=max_remote_calls),
+                response_mime_type="application/json",
+                response_schema=ReportPayload,
+                max_output_tokens=max_output_tokens,
+                thinking_config=types.ThinkingConfig(
+                    thinking_level=thinking_level),
                 temperature=0.2,
             ),
         )
@@ -203,7 +358,7 @@ def ask(question: str, mode: str = "auto",
             "side). Wait a minute and ask again — the app automatically tries "
             "backup models.")
 
-    report = _extract_json(response.text or "")
+    report = _extract_json(_response_text(response))
     report.setdefault("key_findings", [])
     report.setdefault("counterevidence", [])
     report.setdefault("data_scope", {})
@@ -211,4 +366,38 @@ def ask(question: str, mode: str = "auto",
     report["tool_trace"] = _tool_trace(response)
     report["model"] = model
     report["generated_at"] = datetime.now(timezone.utc).isoformat()
+    report["usage"] = _usage(response)
+    report["model_attempts"] = model_attempts
+    report["cached"] = False
     return report
+
+
+def ask(question: str, mode: str = "auto",
+        context: dict | None = None) -> dict:
+    """Run an investigation, reusing identical successful reports for 12h."""
+    question = " ".join(question.split())
+    if not question:
+        raise ValueError("question cannot be empty")
+    if mode not in {"auto", "player", "claim", "compare", "game"}:
+        raise ValueError(f"unknown AI mode '{mode}'")
+
+    # A game page supplies an exact game ID, so this route is unambiguous and
+    # needs only the two game tools even if the UI is still set to Auto.
+    effective_mode = (
+        "game" if mode == "auto" and context and context.get("game_id") else mode
+    )
+
+    requested_model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+    key = _cache_key(question, effective_mode, context, requested_model)
+    if hit := _cached_report(key):
+        return hit
+
+    # The second cache check makes concurrent duplicates wait for and reuse the
+    # first result rather than spending two free-tier requests.
+    with _request_lock(key):
+        if hit := _cached_report(key):
+            return hit
+        report = _generate_report(
+            question, effective_mode, context, requested_model)
+        _store_report(key, report)
+        return report

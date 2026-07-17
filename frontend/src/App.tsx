@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
 import SearchPalette, { useSearchPalette } from "./components/SearchPalette";
-import Home from "./pages/Home";
-import PlayerProfile from "./pages/PlayerProfile";
-import GameDetailPage from "./pages/GameDetail";
-import GamesPage from "./pages/Games";
-import ComparePage from "./pages/Compare";
-import AiMode from "./pages/AiMode";
+
+const Home = lazy(() => import("./pages/Home"));
+const PlayerProfile = lazy(() => import("./pages/PlayerProfile"));
+const GameDetailPage = lazy(() => import("./pages/GameDetail"));
+const GamesPage = lazy(() => import("./pages/Games"));
+const ComparePage = lazy(() => import("./pages/Compare"));
+const AiMode = lazy(() => import("./pages/AiMode"));
 
 function ThemeToggle() {
   const [theme, setTheme] = useState(
@@ -89,14 +90,16 @@ export default function App() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        <Routes>
-          <Route path="/" element={<Home onSearch={() => setOpen(true)} />} />
-          <Route path="/player/:id" element={<PlayerProfile />} />
-          <Route path="/player/:id/game/:gameId" element={<GameDetailPage />} />
-          <Route path="/games" element={<GamesPage />} />
-          <Route path="/compare" element={<ComparePage />} />
-          <Route path="/ai" element={<AiMode />} />
-        </Routes>
+        <Suspense fallback={<div className="text-sm text-ink-muted py-8">Loading…</div>}>
+          <Routes>
+            <Route path="/" element={<Home onSearch={() => setOpen(true)} />} />
+            <Route path="/player/:id" element={<PlayerProfile />} />
+            <Route path="/player/:id/game/:gameId" element={<GameDetailPage />} />
+            <Route path="/games" element={<GamesPage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/ai" element={<AiMode />} />
+          </Routes>
+        </Suspense>
       </main>
 
       <DataFreshnessFooter />

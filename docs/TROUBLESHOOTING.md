@@ -4,14 +4,18 @@ Common issues and quick fixes. Most problems are one of the first three.
 
 ## AI Mode says it's rate-limited or cooling down
 
-**"Wait a minute and ask again"** — the free Gemini tier allows only a handful of
-questions per minute. Pause ~60 seconds and retry.
+**"Wait a minute and ask again"** — the project hit a short-term Gemini request
+or input-token limit. Pause ~60 seconds and retry.
 
 **"Daily free allowance used up — resets around midnight Pacific"** — you've hit
 the per-day cap. AI Mode returns the next day. Everything else in the app keeps
-working. If you want more headroom, create a fresh free key at
-[aistudio.google.com](https://aistudio.google.com) → "Get API key" and paste it
-into `backend\.env` as `GEMINI_API_KEY`.
+working.
+
+Google applies limits per project, not per API key, and the active numbers vary
+by model/account. Check the Rate limits page in Google AI Studio for your actual
+requests/minute, input tokens/minute and requests/day. Repeating an identical
+successful question within 12 hours uses the app's local answer cache and does
+not make another Gemini request.
 
 **"Google's AI servers are overloaded"** — temporary on Google's side; the app
 already tries backup models. Wait a minute and retry.

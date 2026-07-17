@@ -5,6 +5,7 @@ __pycache__/
 backend/data/*.sqlite
 backend/data/*.sqlite-journal
 backend/.env
+backend/evals/results/*.json
 
 # Node
 frontend/node_modules/

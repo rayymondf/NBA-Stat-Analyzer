@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "claim_efficiency_with_baseline",
+      "question": "Is Jayson Tatum an inefficient scorer?",
+      "mode": "claim",
+      "tool_policy": {
+        "required": ["search_player"],
+        "one_of": [["get_player_stats", "get_player_percentiles"]],
+        "forbidden": ["list_games", "investigate_game"],
+        "max_calls": 5
+      },
+      "report_policy": {
+        "verdict_required": true,
+        "min_findings": 1,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "player_recent_trend",
+      "question": "Has LeBron James declined over his last 10 games compared with his season?",
+      "mode": "player",
+      "tool_policy": {
+        "required": ["search_player", "get_trends"],
+        "one_of": [["get_player_stats", "get_game_log"]],
+        "forbidden": ["list_games", "investigate_game", "compare_players"],
+        "max_calls": 4
+      },
+      "report_policy": {
+        "verdict_required": false,
+        "min_findings": 1,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "compare_three_point_shooting",
+      "question": "Compare Stephen Curry and Damian Lillard as three-point shooters.",
+      "mode": "compare",
+      "tool_policy": {
+        "required": ["search_player"],
+        "one_of": [["compare_players", "get_shot_profile"]],
+        "forbidden": ["list_games", "investigate_game", "league_query"],
+        "max_calls": 5
+      },
+      "report_policy": {
+        "verdict_required": false,
+        "min_findings": 2,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "game_with_page_context",
+      "question": "Why did the losing team lose this game?",
+      "mode": "game",
+      "context": {"game_id": "0022501190"},
+      "tool_policy": {
+        "required": ["investigate_game"],
+        "one_of": [],
+        "forbidden": ["search_player", "get_player_stats", "list_games"],
+        "max_calls": 2
+      },
+      "report_policy": {
+        "verdict_required": false,
+        "min_findings": 2,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "game_needs_lookup",
+      "question": "Why did the Knicks lose their most recent completed game?",
+      "mode": "game",
+      "tool_policy": {
+        "required": ["list_games", "investigate_game"],
+        "one_of": [],
+        "forbidden": ["search_player", "get_player_stats", "league_query"],
+        "max_calls": 3
+      },
+      "report_policy": {
+        "verdict_required": false,
+        "min_findings": 2,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "league_leaders",
+      "question": "Who are the top five scorers in the league this season?",
+      "mode": "auto",
+      "tool_policy": {
+        "required": ["league_query"],
+        "one_of": [],
+        "forbidden": ["investigate_game", "get_on_off_impact"],
+        "max_calls": 2
+      },
+      "report_policy": {
+        "verdict_required": false,
+        "min_findings": 1,
+        "counterevidence_required": false
+      }
+    },
+    {
+      "id": "similar_players",
+      "question": "Which current players have the most similar statistical profile to Shai Gilgeous-Alexander?",
+      "mode": "auto",
+      "tool_policy": {
+        "required": ["search_player", "find_similar_players"],
+        "one_of": [],
+        "forbidden": ["list_games", "investigate_game"],
+        "max_calls": 3
+      },
+      "report_policy": {
+        "verdict_required": false,
+        "min_findings": 1,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "on_off_causality_caveat",
+      "question": "Does Nikola Jokic make his team better when he is on the court?",
+      "mode": "claim",
+      "tool_policy": {
+        "required": ["search_player", "get_on_off_impact"],
+        "one_of": [["get_player_stats", "get_player_percentiles"]],
+        "forbidden": ["list_games", "investigate_game"],
+        "max_calls": 5
+      },
+      "report_policy": {
+        "verdict_required": true,
+        "min_findings": 1,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "filtered_small_sample",
+      "question": "Is Luka Doncic inefficient in road losses against Boston?",
+      "mode": "claim",
+      "tool_policy": {
+        "required": ["search_player", "get_player_stats"],
+        "one_of": [],
+        "forbidden": ["list_games", "investigate_game"],
+        "max_calls": 4
+      },
+      "report_policy": {
+        "verdict_required": true,
+        "min_findings": 1,
+        "counterevidence_required": true
+      }
+    },
+    {
+      "id": "unsupported_subjective_claim",
+      "question": "Is Jimmy Butler the best locker-room leader in the NBA?",
+      "mode": "claim",
+      "tool_policy": {
+        "required": [],
+        "one_of": [],
+        "forbidden": ["list_games", "investigate_game"],
+        "max_calls": 2
+      },
+      "report_policy": {
+        "verdict_required": true,
+        "allowed_verdicts": ["Insufficient evidence"],
+        "min_findings": 0,
+        "counterevidence_required": true
+      }
+    }
+  ]
+}
