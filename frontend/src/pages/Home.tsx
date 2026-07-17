@@ -33,13 +33,10 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
           calculated evidence.
         </p>
         {meta && (
-          <div className="mt-2 text-xs text-ink-muted space-y-1">
-            <p>
-              Live official NBA data · {meta.current_season} season
-              {meta.data_through && ` · updated through ${meta.data_through}`}
-            </p>
-            <p>{meta.player_lookup_note}</p>
-          </div>
+          <p className="mt-2 text-xs text-ink-muted">
+            Live official NBA data · {meta.current_season} season
+            {meta.data_through && ` · updated through ${meta.data_through}`}
+          </p>
         )}
         <button
           onClick={onSearch}
@@ -52,6 +49,11 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
           Search {meta?.current_season ?? "current"} and current roster players…
           <kbd className="ml-auto text-[10px] border border-edge rounded px-1.5 py-0.5">Ctrl K</kbd>
         </button>
+        {meta && (
+          <p className="mt-2 text-xs text-ink-muted max-w-md mx-auto">
+            {meta.player_lookup_note}
+          </p>
+        )}
       </section>
 
       <section className="mb-12">
