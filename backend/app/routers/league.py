@@ -33,6 +33,10 @@ def meta():
         "default_seasons": [cur, previous_season(cur)],
         "season_types": ["Regular Season", "Playoffs"],
         "data_through": data_through,
+        "player_lookup_note": (
+            f"Player lookup covers everyone who appeared in {cur}, plus "
+            "current roster additions and injured/inactive players with no "
+            f"{cur} appearances."),
         "freshness_note": (
             f"Official NBA.com statistics through the {cur} season. "
             "Current-season numbers refresh automatically every 12 hours; "

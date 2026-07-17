@@ -27,6 +27,9 @@ export interface SearchResult {
   ppg: number | null;
   rpg: number | null;
   apg: number | null;
+  lookup_season: string;
+  has_season_stats: boolean;
+  current_roster: boolean;
 }
 
 export interface Filters {
@@ -79,6 +82,7 @@ export const api = {
       seasons: string[];
       season_types: string[];
       data_through: string | null;
+      player_lookup_note: string;
       freshness_note: string;
     }>("/meta"),
   search: (q: string) => get<SearchResult[]>("/players/search", { q }),

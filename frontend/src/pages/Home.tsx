@@ -28,14 +28,18 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
           <span style={{ color: "var(--series-1)" }}>Investigate what they mean.</span>
         </h1>
         <p className="mt-4 text-ink-2 text-base">
-          Interactive shot charts, efficiency dashboards and trends for every player —
-          plus an AI analyst that answers questions with real, calculated evidence.
+          Interactive shot charts, efficiency dashboards and trends for season participants
+          and current roster players — plus an AI analyst that answers questions with real,
+          calculated evidence.
         </p>
         {meta && (
-          <p className="mt-2 text-xs text-ink-muted">
-            Live official NBA data · {meta.current_season} season
-            {meta.data_through && ` · updated through ${meta.data_through}`}
-          </p>
+          <div className="mt-2 text-xs text-ink-muted space-y-1">
+            <p>
+              Live official NBA data · {meta.current_season} season
+              {meta.data_through && ` · updated through ${meta.data_through}`}
+            </p>
+            <p>{meta.player_lookup_note}</p>
+          </div>
         )}
         <button
           onClick={onSearch}
@@ -45,7 +49,7 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
             <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
             <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          Search any NBA player…
+          Search {meta?.current_season ?? "current"} and current roster players…
           <kbd className="ml-auto text-[10px] border border-edge rounded px-1.5 py-0.5">Ctrl K</kbd>
         </button>
       </section>

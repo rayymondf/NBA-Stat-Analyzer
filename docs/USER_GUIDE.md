@@ -14,13 +14,19 @@ The top bar is always there:
 
 The **footer on every page** tells you exactly which season and date the data
 covers, e.g. *"Data: official NBA.com stats · 2025-26 season · games through
-2026-04-12."*
+2026-04-12."* Player lookup covers everyone who appeared during that season,
+plus current roster additions and injured/inactive players who recorded no
+appearances during the displayed season.
 
 ## Finding a player
 
 1. Press `Ctrl + K` (or click **Search players**).
 2. Type a name — partial or out-of-order works ("giannis", "SGA", "luka").
 3. Click a result (or use arrow keys + Enter) to open their profile.
+
+Players with no games in the displayed season are labeled **Current roster · no
+2025-26 appearances**. Their profile can still be opened, but season dashboards
+will show that no games are available rather than inventing statistics.
 
 ## The player profile
 

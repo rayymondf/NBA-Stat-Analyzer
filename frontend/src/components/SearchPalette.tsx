@@ -112,6 +112,11 @@ export default function SearchPalette({
                 <div className="text-xs text-ink-muted">
                   {r.team ?? "Free agent"} · {r.position ?? "—"}{r.jersey ? ` · #${r.jersey}` : ""}
                 </div>
+                {!r.has_season_stats && (
+                  <div className="text-[11px]" style={{ color: "var(--warning)" }}>
+                    Current roster · no {r.lookup_season} appearances
+                  </div>
+                )}
               </div>
               {r.ppg != null && (
                 <div className="text-xs tnum text-ink-muted shrink-0">

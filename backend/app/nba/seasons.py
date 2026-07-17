@@ -14,6 +14,19 @@ def previous_season(season: str) -> str:
     return f"{start}-{str(start + 1)[-2:]}"
 
 
+def next_season(season: str) -> str:
+    start = int(season[:4]) + 1
+    return f"{start}-{str(start + 1)[-2:]}"
+
+
+def forward_roster_season(today: date | None = None) -> str | None:
+    """Next season while offseason rosters are being populated (Jul-Sep)."""
+    today = today or date.today()
+    if 7 <= today.month <= 9:
+        return next_season(current_season(today))
+    return None
+
+
 def season_start_year(season: str) -> int:
     return int(season[:4])
 

@@ -46,6 +46,7 @@ function DataFreshnessFooter() {
         )}
       </span>
       <span>Current-season numbers refresh every 12 hours; completed seasons are final.</span>
+      <span>{meta.player_lookup_note}</span>
     </footer>
   );
 }

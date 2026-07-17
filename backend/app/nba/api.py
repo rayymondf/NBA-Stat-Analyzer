@@ -58,6 +58,19 @@ def player_index(season: str) -> list[dict]:
     return data.get("PlayerIndex", [])
 
 
+def active_player_index(season: str) -> list[dict]:
+    """Official active roster index, including players with zero games."""
+    data = fetch(
+        playerindex.PlayerIndex,
+        season=season,
+        league_id="00",
+        active_nullable="1",
+        historical_nullable="0",
+        ttl=12 * 3600,
+    )
+    return data.get("PlayerIndex", [])
+
+
 def common_player_info(player_id: int) -> dict:
     data = fetch(commonplayerinfo.CommonPlayerInfo, player_id=player_id)
     rows = data.get("CommonPlayerInfo", [])

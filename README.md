@@ -5,8 +5,9 @@ actually mean. Runs entirely on your own PC — 100% free, no subscriptions.
 
 ## What it does
 
-- **Player analytics** — search any NBA player and open an interactive profile
-  with eight dashboards: performance overview with position percentiles, an
+- **Player analytics** — search everyone who appeared in the displayed season,
+  plus current roster additions and injured/inactive players with zero games,
+  then open an interactive profile with eight dashboards: performance overview with position percentiles, an
   interactive shot chart (dots / heatmap / zones-vs-league), shooting,
   efficiency, playing time, fouls, a sortable game log, trends, and on/off
   impact.

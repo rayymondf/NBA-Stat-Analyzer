@@ -1,8 +1,9 @@
 """Player search, bio, summary card, and filtered stat bundles."""
 import pandas as pd
+from nba_api.stats.static import players as static_players
 
 from ..nba import api
-from ..nba.seasons import current_season
+from ..nba.seasons import current_season, forward_roster_season
 from . import frames, percentiles
 
 HEADSHOT_URL = "https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
@@ -10,10 +11,76 @@ HEADSHOT_URL = "https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
 POSITION_LABEL = {"G": "guards", "F": "forwards", "C": "centers"}
 
 
+def player_lookup_index(season: str | None = None) -> list[dict]:
+    """Season participants plus current players with zero season appearances.
+
+    The season index supplies real season stats. The bundled current-player
+    registry ensures a fully injured/inactive player remains searchable. During
+    the offseason transition, the next-season NBA roster index fills in current
+    team, position and jersey data and includes newly added players.
+    """
+    season = season or current_season()
+    merged: dict[int, dict] = {}
+    for row in api.player_index(season):
+        item = dict(row)
+        item["_HAS_SEASON_STATS"] = True
+        item["_CURRENT_ROSTER"] = False
+        item["_LOOKUP_SEASON"] = season
+        merged[item["PERSON_ID"]] = item
+
+    roster_season = forward_roster_season()
+    if roster_season:
+        for row in api.active_player_index(roster_season):
+            player_id = row["PERSON_ID"]
+            if player_id in merged:
+                # Preserve 2025-26 averages but show the latest roster details.
+                item = merged[player_id]
+                for key in (
+                    "TEAM_ID", "TEAM_SLUG", "TEAM_CITY", "TEAM_NAME",
+                    "TEAM_ABBREVIATION", "JERSEY_NUMBER", "POSITION",
+                    "HEIGHT", "WEIGHT",
+                ):
+                    if row.get(key) not in (None, ""):
+                        item[key] = row[key]
+                item["_CURRENT_ROSTER"] = True
+            else:
+                item = dict(row)
+                item["_HAS_SEASON_STATS"] = False
+                item["_CURRENT_ROSTER"] = True
+                item["_LOOKUP_SEASON"] = season
+                merged[player_id] = item
+
+    # This local registry covers zero-game active players even before the NBA
+    # begins publishing the next-season roster endpoint.
+    for row in static_players.get_active_players():
+        player_id = row["id"]
+        if player_id in merged:
+            merged[player_id]["_CURRENT_ROSTER"] = True
+            continue
+        merged[player_id] = {
+            "PERSON_ID": player_id,
+            "PLAYER_FIRST_NAME": row["first_name"],
+            "PLAYER_LAST_NAME": row["last_name"],
+            "TEAM_ID": 0,
+            "TEAM_ABBREVIATION": None,
+            "TEAM_CITY": None,
+            "TEAM_NAME": None,
+            "POSITION": None,
+            "JERSEY_NUMBER": None,
+            "PTS": None,
+            "REB": None,
+            "AST": None,
+            "_HAS_SEASON_STATS": False,
+            "_CURRENT_ROSTER": True,
+            "_LOOKUP_SEASON": season,
+        }
+    return list(merged.values())
+
+
 def search(query: str, limit: int = 12) -> list[dict]:
-    """Search current + recent players by name (case/word-order insensitive)."""
+    """Search season participants + current roster players by name."""
     season = current_season()
-    idx = api.player_index(season)
+    idx = player_lookup_index(season)
     q = query.lower().strip()
     scored = []
     for r in idx:
@@ -36,6 +103,9 @@ def search(query: str, limit: int = 12) -> list[dict]:
             "ppg": r.get("PTS"),
             "rpg": r.get("REB"),
             "apg": r.get("AST"),
+            "lookup_season": r.get("_LOOKUP_SEASON", season),
+            "has_season_stats": bool(r.get("_HAS_SEASON_STATS", True)),
+            "current_roster": bool(r.get("_CURRENT_ROSTER", False)),
         })
     return out
 
