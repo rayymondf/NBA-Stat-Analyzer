@@ -3,8 +3,8 @@ statistics — the model itself never calculates numbers. Outputs are trimmed
 to keep token usage low on the free tier."""
 from ..nba.seasons import current_season, previous_season
 from ..services import (compare, efficiency, frames, game_investigation,
-                        impact as impact_svc, league, players, shooting,
-                        trends)
+                        impact as impact_svc, league, ml, players, playoffs,
+                        shooting, trends)
 
 
 SMALL_SAMPLE_GAMES = 15
@@ -25,17 +25,33 @@ def _small_sample_note(games: int | None, season: str) -> str | None:
     (e.g. right after the October rollover the current season has ~5 games)."""
     if games is not None and games < SMALL_SAMPLE_GAMES:
         g = f"{games} game" + ("" if games == 1 else "s")
-        return (f"Only {g} in {season} — small sample. Also query season "
+        return (f"Only {g} in {season}, a small sample. Also query season "
                 f"{previous_season(season)} and label which season each number "
                 f"comes from before concluding.")
     return None
 
 
 def search_player(name: str) -> list[dict]:
-    """Find NBA players by name. Returns player_id, team and position for the
-    best matches — always call this first when you only have a name."""
+    """Find NBA players by name (misspellings tolerated). Returns player_id,
+    team and position for the best matches — always call this first when you
+    only have a name."""
     return [{k: r[k] for k in ("player_id", "name", "team", "position")}
             for r in players.search(name, limit=5)]
+
+
+def get_elimination_game_stats(player_id: int, seasons_back: int = 6) -> dict:
+    """Playoff elimination-game analysis: how the player performs when their
+    team faces elimination (down 3 losses in a series), vs closeout games and
+    their overall playoff baseline. Covers the last `seasons_back` seasons and
+    includes each elimination game line as evidence. Use this for questions
+    like 'is X bad in elimination games / win-or-go-home games'."""
+    out = playoffs.elimination_stats(player_id, seasons_back)
+    lines = (out.get("elimination") or {}).get("game_lines")
+    if isinstance(lines, list) and len(lines) > 12:
+        # Cap evidence rows: every row costs input tokens on the free tier.
+        out["elimination"]["game_lines"] = lines[:12]
+        out["elimination"]["game_lines_truncated"] = len(lines) - 12
+    return _round(out)
 
 
 def get_player_stats(player_id: int, season: str = "", season_type: str = "Regular Season",
@@ -225,9 +241,22 @@ def get_previous_season(season: str) -> dict:
     return {"previous_season": previous_season(season)}
 
 
+def get_shot_quality(player_id: int, season: str = "",
+                     season_type: str = "Regular Season") -> dict:
+    """ML shot-quality (xFG) estimate: what an average NBA player would shoot
+    from this player's exact shot locations vs what they actually shot.
+    Positive delta = makes more than expected (shot-making skill beyond shot
+    selection); includes per-zone deltas and a league percentile. This is a
+    trained-model estimate — label it as such when citing it."""
+    q = ml.shot_quality(player_id, season or None, season_type)
+    q.pop("explanation", None)
+    return _round(q)
+
+
 ALL_TOOLS = [
     search_player, get_player_stats, get_player_percentiles, get_shot_profile,
     get_trends, get_career, compare_players, league_query,
     find_similar_players, list_games, investigate_game, get_game_log,
-    get_on_off_impact, get_previous_season,
+    get_on_off_impact, get_previous_season, get_elimination_game_stats,
+    get_shot_quality,
 ]

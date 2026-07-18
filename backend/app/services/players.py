@@ -1,4 +1,6 @@
 """Player search, bio, summary card, and filtered stat bundles."""
+import difflib
+
 import pandas as pd
 from nba_api.stats.static import players as static_players
 
@@ -89,6 +91,24 @@ def search(query: str, limit: int = 12) -> list[dict]:
         if q in low or all(part in low for part in q.split()):
             starts = low.startswith(q)
             scored.append((0 if starts else 1, full, r))
+    if not scored:
+        # Typo tolerance: "daminion lilard" should still find Damian Lillard.
+        by_name = {}
+        for r in idx:
+            full = f"{r['PLAYER_FIRST_NAME']} {r['PLAYER_LAST_NAME']}".strip()
+            by_name.setdefault(full.lower(), (full, r))
+        close = difflib.get_close_matches(q, by_name.keys(), n=limit, cutoff=0.6)
+        if not close and len(q.split()) > 1:
+            # Match on last name alone ("lilard" -> Lillard)
+            last = q.split()[-1]
+            last_map = {}
+            for low, (full, r) in by_name.items():
+                last_map.setdefault(low.split()[-1], []).append(low)
+            for hit in difflib.get_close_matches(last, last_map.keys(), n=3,
+                                                 cutoff=0.7):
+                close.extend(last_map[hit])
+        scored = [(2, by_name[c][0], by_name[c][1])
+                  for c in dict.fromkeys(close)]
     scored.sort(key=lambda t: (t[0], t[1]))
     out = []
     for _, full, r in scored[:limit]:
@@ -174,7 +194,7 @@ def _blurb(name: str, agg: dict, pcts: dict, pos_group: str) -> str:
             parts.append(f"on {ts * 100:.1f}% true shooting")
     scoring_rank = pcts.get("PTS", {}).get("percentile")
     if scoring_rank is not None and scoring_rank >= 85:
-        parts.append(f"— one of the highest-volume scorers among {pos}")
+        parts.append(f"and is one of the highest-volume scorers among {pos}")
     return " ".join(parts) + "."
 
 

@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 backend/data/*.sqlite
 backend/data/*.sqlite-journal
+backend/data/models/
 backend/.env
 backend/evals/results/*.json
 

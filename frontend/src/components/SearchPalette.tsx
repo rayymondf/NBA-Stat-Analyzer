@@ -86,7 +86,7 @@ export default function SearchPalette({
         </div>
         <div className="max-h-80 overflow-y-auto">
           {q.trim().length < 2 && (
-            <p className="p-4 text-sm text-ink-muted">Type at least two letters — try "Wembanyama" or "Curry".</p>
+            <p className="p-4 text-sm text-ink-muted">Type at least two letters. Try "Wembanyama" or "Curry".</p>
           )}
           {q.trim().length >= 2 && !isFetching && results.length === 0 && (
             <p className="p-4 text-sm text-ink-muted">No players found for "{q}".</p>
@@ -110,7 +110,7 @@ export default function SearchPalette({
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{r.name}</div>
                 <div className="text-xs text-ink-muted">
-                  {r.team ?? "Free agent"} · {r.position ?? "—"}{r.jersey ? ` · #${r.jersey}` : ""}
+                  {r.team ?? "Free agent"} · {r.position ?? "–"}{r.jersey ? ` · #${r.jersey}` : ""}
                 </div>
                 {!r.has_season_stats && (
                   <div className="text-[11px]" style={{ color: "var(--warning)" }}>

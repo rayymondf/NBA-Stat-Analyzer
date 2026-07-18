@@ -1,5 +1,7 @@
 const BASE = "/api";
 
+export const DATASET_URL = "/api/ml/dataset.csv";
+
 async function get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
   const qs = params
     ? "?" +
@@ -89,6 +91,7 @@ export const api = {
   summary: (id: number, p?: Filters) => get<any>(`/players/${id}/summary`, p as any),
   overview: (id: number, p?: Filters) => get<any>(`/players/${id}/overview`, p as any),
   shooting: (id: number, p?: Record<string, unknown>) => get<any>(`/players/${id}/shooting`, p),
+  shotQuality: (id: number, p?: Filters) => get<any>(`/players/${id}/shot-quality`, p as any),
   efficiency: (id: number, p?: Filters) => get<any>(`/players/${id}/efficiency`, p as any),
   playtime: (id: number, p?: Filters) => get<any>(`/players/${id}/playtime`, p as any),
   fouls: (id: number, p?: Filters) => get<any>(`/players/${id}/fouls`, p as any),
@@ -98,6 +101,7 @@ export const api = {
   career: (id: number) => get<any>(`/players/${id}/career`),
   impact: (id: number, p?: Filters) => get<any>(`/players/${id}/impact`, p as any),
   compare: (a: number, b: number, p?: Filters) => get<any>("/compare", { a, b, ...p }),
+  modelInfo: () => get<any>("/ml/model-info"),
   games: (p?: Record<string, unknown>) => get<any[]>("/games", p),
   investigate: (gameId: string) => get<any>(`/games/${gameId}/investigate`),
   leaders: (p?: Record<string, unknown>) => get<any[]>("/league/leaders", p),

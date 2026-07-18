@@ -47,7 +47,7 @@ export default function OverviewSection({ playerId, filters }: {
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatTile label="Games" value={stats.games} sub={stats.starts != null ? `${stats.starts} starts` : undefined} />
-        <StatTile label="Record" value={`${stats.wins ?? "—"}-${stats.losses ?? "—"}`} />
+        <StatTile label="Record" value={`${stats.wins ?? "–"}-${stats.losses ?? "–"}`} />
         <StatTile label="Minutes" value={num(rates?.MIN)} tip="PER_36" />
         <StatTile label="Points" value={num(rates?.PTS)} />
         <StatTile label="Rebounds" value={num(rates?.REB)} />
@@ -80,7 +80,7 @@ export default function OverviewSection({ playerId, filters }: {
         </div>
         <p className="text-[11px] text-ink-muted mt-3">
           Percentiles always compare full-season per-game numbers against players at the
-          same position (min. 10 games, 15 MPG) — they don't change with the filters above.
+          same position (min. 10 games, 15 MPG); they don't change with the filters above.
         </p>
       </Card>
     </div>

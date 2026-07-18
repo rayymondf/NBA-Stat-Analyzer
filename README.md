@@ -11,8 +11,11 @@ actually mean. Runs entirely on your own PC — 100% free, no subscriptions.
   interactive shot chart (dots / heatmap / zones-vs-league), shooting,
   efficiency, playing time, fouls, a sortable game log, trends, and on/off
   impact.
-- **Compare** — put two players side by side across scoring, efficiency,
-  playmaking, rebounding, fouls and shot-location profiles.
+- **The Model** — a machine-learning model trained on about 657,000 real NBA
+  shots (three seasons) estimates what each player *should* shoot from their
+  shot locations. Pick any player and see whether they beat it, explore how it
+  was built, and download the full training dataset as a CSV. The same section
+  also holds the classic player vs player comparison.
 - **Games** — pick any completed game and get a ranked, evidence-based
   explanation of why a team won or lost (four factors, star performances,
   scoring runs, fourth-quarter execution).

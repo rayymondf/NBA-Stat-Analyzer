@@ -77,6 +77,50 @@ The `backend/app/routers/` files expose these as web addresses (e.g.
 `/api/players/2544/shooting`). The frontend just asks for computed results and
 draws them.
 
+## The ML model: shot quality (xFG)
+
+This is the app's only *trained* machine-learning component, different from
+AI Mode, which reasons in language but trains nothing.
+
+**What it does, in plain English.** The model studied about 657,000 real NBA
+shots (three full seasons) and learned how often shots go in from every spot
+and shot type: a dunk goes in 90%+ of the time, a wide corner three about 39%,
+a deep stepback about 33%. For any player it then answers: *from the exact
+spots and shot types this player used, what would an average NBA player have
+shot?* That is **expected eFG% (xFG)**. Comparing it with the player's
+**actual eFG%** isolates pure shot-*making* skill from shot *selection*. A
++3.0 delta means the player converts well above what their shot locations
+usually yield.
+
+**What it is NOT.** The model only sees shot data NBA.com records: court
+location, distance, angle, shot type (dunk, layup, pull-up and so on),
+quarter, seconds left in the quarter, home or away. It **never sees video or
+images**; judging shooting *form* from clips is computer vision, a much
+heavier kind of ML that is out of scope for this app.
+
+**How it was trained (and how to retrain).**
+`backend/scripts/train_models.py` downloads the league-wide shots (30 cached
+requests per season), tries several gradient-boosted classifier settings
+(scikit-learn: free, local, a few minutes), grades the winner on 87,738
+held-out shots it never trained on, and only saves the new model if it beats
+the previous one on those exact same shots. Its predicted make rates match
+reality within about one point at every distance, and it knows an
+end-of-quarter half-court heave is a low-percentage shot, not a normal
+three-pointer. The result is saved to `backend/data/models/xfg.joblib`.
+Re-run the script once a season if you want it refreshed:
+
+```
+backend\venv\Scripts\python.exe backend\scripts\train_models.py
+```
+
+**Where it shows up.** "The Model" section in the top navigation is its home:
+pick a player and see actual vs expected eFG%, a league-distribution chart, a
+calibration chart, per-zone deltas, and a download link for the full training
+dataset as a CSV. A compact "Shot quality (ML)" card also stays in every
+player's Shooting tab, and AI Mode can cite it through the `get_shot_quality`
+tool. It is always labeled as a model estimate, never presented as a box-score
+fact.
+
 ## How AI Mode works (and why it doesn't make things up)
 
 AI Mode uses Google Gemini, but with a strict contract: **the language model

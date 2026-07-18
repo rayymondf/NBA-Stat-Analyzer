@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { signed, num, pct } from "../lib/format";
-import { Card, CardTitle, ErrorState, Skeleton } from "../components/ui";
+import { Card, CardTitle, ErrorState, HowItsMade, PageHeader, Skeleton } from "../components/ui";
 
 const TEAMS = ["","ATL","BOS","BKN","CHA","CHI","CLE","DAL","DEN","DET","GSW","HOU","IND","LAC","LAL","MEM","MIA","MIL","MIN","NOP","NYK","OKC","ORL","PHI","PHX","POR","SAC","SAS","TOR","UTA","WAS"];
 
@@ -47,7 +47,13 @@ export default function GamesPage() {
   const resetPaging = () => setVisible(PAGE);
 
   return (
-    <div className="grid lg:grid-cols-[340px_1fr] gap-4 items-start">
+    <div>
+      <PageHeader
+        kicker="Every game, investigated"
+        title="Games"
+        dek="Pick any completed game and get a ranked, evidence-based explanation of why it was won and lost."
+      />
+      <div className="grid lg:grid-cols-[340px_1fr] gap-4 items-start">
       <Card className="!p-0 overflow-hidden">
         <div className="p-3 border-b border-edge space-y-2">
           <div className="flex gap-2">
@@ -147,10 +153,18 @@ export default function GamesPage() {
         <Investigation gameId={selected} />
       ) : (
         <Card className="text-center py-16 text-ink-muted text-sm">
-          Pick a completed game to see why it was won and lost —
+          Pick a completed game to see why it was won and lost:
           shooting, turnovers, runs, stars and fourth-quarter execution, ranked by evidence.
         </Card>
       )}
+      </div>
+      <HowItsMade>
+        Game investigations are pure statistics, no AI. The app pulls the
+        official box score and play-by-play from NBA.com, computes the four
+        factors, star performances vs season averages, scoring runs and
+        fourth-quarter execution, then ranks the strongest explanations with
+        evidence for and against each one.
+      </HowItsMade>
     </div>
   );
 }
@@ -194,7 +208,7 @@ function Investigation({ gameId }: { gameId: string }) {
       </div>
 
       <Card>
-        <CardTitle>Why it happened — strongest explanations first</CardTitle>
+        <CardTitle>Why it happened, strongest explanations first</CardTitle>
         <div className="space-y-3">
           {data.explanations.map((e: any) => (
             <div key={e.key} className="border border-edge rounded-lg p-3">

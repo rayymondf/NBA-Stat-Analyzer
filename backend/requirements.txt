@@ -5,3 +5,5 @@ pandas
 google-genai
 python-dotenv
 requests
+scikit-learn
+joblib

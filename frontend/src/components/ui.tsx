@@ -1,6 +1,74 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { GLOSSARY } from "../lib/glossary";
 import { ordinal } from "../lib/format";
+
+/** Editorial page header: kicker, serif headline, muted dek, hairline rule. */
+export function PageHeader({ kicker, title, dek }: {
+  kicker?: string; title: ReactNode; dek?: ReactNode;
+}) {
+  return (
+    <div className="mb-8 section-in">
+      {kicker && <div className="eyebrow mb-2">{kicker}</div>}
+      <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight leading-tight">
+        {title}
+      </h1>
+      {dek && <p className="text-sm text-ink-2 mt-2 max-w-2xl leading-relaxed">{dek}</p>}
+      <div className="rule mt-6" />
+    </div>
+  );
+}
+
+/** Count-up number; respects prefers-reduced-motion. */
+export function AnimatedNumber({ value, format }: {
+  value: number; format?: (n: number) => string;
+}) {
+  const fmt = format ?? ((n: number) => `${Math.round(n)}`);
+  const [shown, setShown] = useState(0);
+  const raf = useRef(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(value);
+      return;
+    }
+    const start = performance.now();
+    const dur = 500;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setShown(value * eased);
+      if (p < 1) raf.current = requestAnimationFrame(tick);
+    };
+    raf.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf.current);
+  }, [value]);
+  return <span className="tnum">{fmt(shown)}</span>;
+}
+
+/** Collapsible "how this section is made" strip. */
+export function HowItsMade({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rule mt-10 pt-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="eyebrow flex items-center gap-1.5 hover:text-ink-2 transition-colors"
+      >
+        <span
+          className="inline-block transition-transform"
+          style={{ transform: open ? "rotate(90deg)" : "none" }}
+        >
+          ›
+        </span>
+        How this is made
+      </button>
+      {open && (
+        <p className="text-xs text-ink-2 leading-relaxed mt-2 max-w-2xl section-in">
+          {children}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
   return <div className={`card p-5 ${className}`}>{children}</div>;

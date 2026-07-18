@@ -23,7 +23,7 @@ from . import tools
 
 VERDICTS = ["Supported", "Mostly supported", "Mixed", "Misleading",
             "Not supported", "Insufficient evidence"]
-PROMPT_VERSION = "2026-07-17.1"
+PROMPT_VERSION = "2026-07-18.1"
 DEFAULT_CACHE_TTL_SECONDS = 12 * 3600
 DEFAULT_MAX_OUTPUT_TOKENS = 1600
 DEFAULT_MAX_REMOTE_CALLS = 6
@@ -62,35 +62,33 @@ class ReportPayload(BaseModel):
     confidence: Literal["high", "medium", "low"]
 
 SYSTEM_PROMPT = f"""You are the research assistant inside "NBA Stat Analyzer".
-You answer NBA questions using ONLY numbers returned by your tools — never from
+You answer NBA questions using ONLY numbers returned by your tools, never from
 memory. The current NBA season is {{season}} (today: {{today}}).
 
 Rules:
 - Resolve player names to IDs with search_player before other tools.
 - NEVER state a statistic you did not get from a tool this conversation.
 - Actively look for counterevidence before concluding; report it honestly.
-- Small samples: always mention sample sizes; below ~10 games, say the
-  evidence is weak. If the data is unavailable or insufficient, say so
-  plainly instead of guessing.
+- Always mention sample sizes; below ~10 games, say the evidence is weak. If
+  data is unavailable or insufficient, say so plainly instead of guessing.
 - EARLY IN A SEASON: if the current season has fewer than ~15 games for the
-  subject (or a tool result includes a "note" about a small sample), ALSO call
-  the same tool for the previous season (use get_previous_season to get its
-  string), then base your answer mainly on the fuller season and clearly label
-  which season each number comes from. Never present a 3-5 game current-season
-  sample as if it settles the question.
-- Comparisons: name who is better per category — never declare someone
+  subject (or a tool result includes a small-sample "note"), ALSO call the
+  same tool for the previous season (get_previous_season gives its string),
+  base your answer mainly on the fuller season, and label which season each
+  number comes from.
+- Comparisons: name who is better per category; never declare someone
   universally better unless the evidence is lopsided across the board.
-- Claim verification: first restate the claim as a measurable definition,
-  then gather evidence, a baseline (league or position context), and
-  counterexamples, then give a verdict from: {", ".join(VERDICTS)}.
-- Keep the tone of a sharp, neutral basketball analyst. Explain advanced
-  stats briefly when used (e.g. "TS% — shooting efficiency incl. 3s and FTs").
+- Claim verification: restate the claim as a measurable definition, gather
+  evidence, a baseline, and counterexamples, then give a verdict from:
+  {", ".join(VERDICTS)}.
+- Tone: sharp, neutral basketball analyst. Briefly explain advanced stats on
+  first use. Never use em dashes; use commas, colons, or periods.
 
 The response schema is enforced separately. Write 2-6 short paragraphs or
 bullets in answer_markdown, use null verdict outside claim checks, put exact
-supporting numbers in key_findings, and include honest caveats in
-counterevidence. Fully populate data_scope and include a link for every player
-and game you analyzed."""
+supporting numbers in key_findings, include honest caveats in counterevidence,
+fully populate data_scope, and include a link for every player and game you
+analyzed."""
 
 
 _TOOLS_BY_MODE = {
@@ -99,17 +97,19 @@ _TOOLS_BY_MODE = {
         tools.get_player_percentiles, tools.get_shot_profile, tools.get_trends,
         tools.get_career, tools.find_similar_players, tools.get_game_log,
         tools.get_on_off_impact, tools.get_previous_season,
+        tools.get_elimination_game_stats, tools.get_shot_quality,
     ],
     "claim": [
         tools.search_player, tools.get_player_stats,
         tools.get_player_percentiles, tools.get_shot_profile, tools.get_trends,
         tools.get_career, tools.compare_players, tools.league_query,
         tools.get_game_log, tools.get_on_off_impact, tools.get_previous_season,
+        tools.get_elimination_game_stats, tools.get_shot_quality,
     ],
     "compare": [
         tools.search_player, tools.compare_players, tools.get_player_stats,
         tools.get_player_percentiles, tools.get_shot_profile, tools.get_trends,
-        tools.get_previous_season,
+        tools.get_previous_season, tools.get_shot_quality,
     ],
     "game": [tools.list_games, tools.investigate_game],
 }
@@ -145,7 +145,7 @@ def _cache_key(question: str, mode: str, context: dict | None,
         "prompt_version": PROMPT_VERSION,
         "season": current_season(),
         "model": model,
-        "question": " ".join(question.lower().split()),
+        "question": " ".join(question.lower().split()).rstrip("?!. "),
         "mode": mode,
         "context": context or {},
     }
@@ -347,15 +347,15 @@ def _generate_report(question: str, mode: str, context: dict | None,
         if "PerDay" in err_text:
             raise AiRateLimited(
                 "Today's free Gemini allowance is used up. It resets around "
-                "midnight Pacific time — AI Mode will work again tomorrow. "
+                "midnight Pacific time, so AI Mode will work again tomorrow. "
                 "All other app features keep working.")
         if getattr(last_err, "code", None) == 429 or "429" in err_text:
             raise AiRateLimited(
-                "The free Gemini tier is rate-limited right now — wait about "
+                "The free Gemini tier is rate-limited right now. Wait about "
                 "a minute and ask again.")
         raise AiRateLimited(
             "Google's AI servers are overloaded right now (temporary, their "
-            "side). Wait a minute and ask again — the app automatically tries "
+            "side). Wait a minute and ask again; the app automatically tries "
             "backup models.")
 
     report = _extract_json(_response_text(response))

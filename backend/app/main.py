@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-from .routers import games, league, players  # noqa: E402
+from .routers import games, league, ml, players  # noqa: E402
 
 app = FastAPI(title="NBA Stat Analyzer")
 
@@ -22,6 +22,7 @@ app.add_middleware(
 app.include_router(players.router)
 app.include_router(games.router)
 app.include_router(league.router)
+app.include_router(ml.router)
 
 try:
     from .routers import ai  # noqa: E402

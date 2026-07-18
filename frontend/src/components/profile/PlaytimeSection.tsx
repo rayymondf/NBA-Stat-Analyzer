@@ -26,9 +26,9 @@ export default function PlaytimeSection({ playerId, filters }: {
         <StatTile label="Minutes / game" value={num(data.min_per_game)} />
         <StatTile label="Total minutes" value={Math.round(data.min_total)} />
         <StatTile label="Games played" value={data.games} sub={data.team_games ? `of ${data.team_games} team games` : undefined} />
-        <StatTile label="Games missed" value={data.games_missed ?? "—"} />
-        <StatTile label="Starts" value={data.starts ?? "—"} sub={data.bench_games != null ? `${data.bench_games} off bench` : undefined} />
-        <StatTile label="Q4 minutes" value={data.q4 ? num(data.q4.min_per_game) : "—"} sub="per game" />
+        <StatTile label="Games missed" value={data.games_missed ?? "–"} />
+        <StatTile label="Starts" value={data.starts ?? "–"} sub={data.bench_games != null ? `${data.bench_games} off bench` : undefined} />
+        <StatTile label="Q4 minutes" value={data.q4 ? num(data.q4.min_per_game) : "–"} sub="per game" />
       </div>
 
       <Card>

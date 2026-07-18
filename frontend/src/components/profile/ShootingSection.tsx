@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type ShotPoint } from "../../lib/api";
 import { num, pct } from "../../lib/format";
@@ -16,6 +17,14 @@ export default function ShootingSection({ playerId, filters }: {
   const { data, isLoading, error } = useQuery({
     queryKey: ["shooting", playerId, filters.season, filters.season_type],
     queryFn: () => api.shooting(playerId, {
+      season: filters.season,
+      season_type: filters.season_type,
+    }),
+  });
+
+  const { data: quality } = useQuery({
+    queryKey: ["shotQuality", playerId, filters.season, filters.season_type],
+    queryFn: () => api.shotQuality(playerId, {
       season: filters.season,
       season_type: filters.season_type,
     }),
@@ -39,8 +48,8 @@ export default function ShootingSection({ playerId, filters }: {
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatTile label="FG" value={pct(t.fg_pct)} sub={`${t.fgm}/${t.fga}`} />
-        <StatTile label="3PT" value={t.fg3a ? pct(t.fg3m / t.fg3a) : "—"} sub={`${t.fg3m}/${t.fg3a}`} />
-        <StatTile label="2PT" value={t.fga - t.fg3a ? pct((t.fgm - t.fg3m) / (t.fga - t.fg3a)) : "—"} sub={`${t.fgm - t.fg3m}/${t.fga - t.fg3a}`} />
+        <StatTile label="3PT" value={t.fg3a ? pct(t.fg3m / t.fg3a) : "–"} sub={`${t.fg3m}/${t.fg3a}`} />
+        <StatTile label="2PT" value={t.fga - t.fg3a ? pct((t.fgm - t.fg3m) / (t.fga - t.fg3a)) : "–"} sub={`${t.fgm - t.fg3m}/${t.fga - t.fg3a}`} />
         <StatTile label="Pts / shot" value={num(t.pts_per_shot, 2)} tip="PTS_PER_SHOT" />
         <StatTile label="Avg distance" value={`${num(t.avg_distance)} ft`} />
         <StatTile label="Attempts" value={t.fga} sub="field goals" />
@@ -90,6 +99,63 @@ export default function ShootingSection({ playerId, filters }: {
               <p className="text-[10px] text-ink-muted pt-1">Bar length = share of total attempts.</p>
             </div>
           </Card>
+
+          {quality?.available && (
+            <Card>
+              <CardTitle tip="XFG">Shot quality (ML)</CardTitle>
+              <div className="flex items-baseline gap-3 mb-2">
+                <div>
+                  <div className="text-lg font-semibold tnum">{pct(quality.actual_efg)}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-ink-muted">Actual eFG%</div>
+                </div>
+                <div className="text-ink-muted text-xs">vs</div>
+                <div>
+                  <div className="text-lg font-semibold tnum">{pct(quality.expected_efg)}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-ink-muted">Expected (xFG)</div>
+                </div>
+                <span
+                  className="ml-auto text-xs font-semibold tnum px-2 py-0.5 rounded-full"
+                  style={{
+                    color: "#fff",
+                    background: quality.delta >= 0.005 ? "var(--good)" :
+                      quality.delta <= -0.005 ? "var(--critical)" : "var(--ink-muted)",
+                  }}
+                >
+                  {quality.delta > 0 ? "+" : ""}{(quality.delta * 100).toFixed(1)}
+                </span>
+              </div>
+              {quality.percentile != null && (
+                <p className="text-xs text-ink-2 mb-2">
+                  Shot-making better than <strong>{quality.percentile}%</strong> of
+                  qualified NBA players.
+                </p>
+              )}
+              <div className="space-y-1 text-xs">
+                {(quality.zones ?? []).map((z: any) => (
+                  <div key={z.zone} className="flex justify-between">
+                    <span className="text-ink-2">{z.zone}</span>
+                    <span className="tnum">
+                      {pct(z.actual_fg)} vs {pct(z.expected_fg)}{" "}
+                      <span style={{ color: z.delta >= 0 ? "var(--delta-up)" : "var(--delta-down)" }}>
+                        ({z.delta > 0 ? "+" : ""}{(z.delta * 100).toFixed(1)})
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-ink-muted mt-2">
+                Model estimate trained on {quality.model?.trained_on_shots?.toLocaleString()} real
+                NBA shots, from shot locations and types only, never video.
+              </p>
+              <Link
+                to={`/model?player=${playerId}`}
+                className="inline-block text-[11px] mt-2 font-medium underline underline-offset-2 hover:text-ink transition-colors"
+                style={{ color: "var(--series-1)" }}
+              >
+                See the full model breakdown
+              </Link>
+            </Card>
+          )}
 
           {sb.pct_ast_fgm != null && (
             <Card>

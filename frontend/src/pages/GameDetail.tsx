@@ -58,13 +58,13 @@ export default function GameDetailPage() {
           <StatTile label="FG" value={`${line.fgm}-${line.fga}`} />
           <StatTile label="3PT" value={`${line.fg3m}-${line.fg3a}`} />
           <StatTile label="TS%" value={pct(ts)} tip="TS_PCT" />
-          <StatTile label="+/-" value={line.plus_minus ?? "—"} />
+          <StatTile label="+/-" value={line.plus_minus ?? "–"} />
         </div>
       )}
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
-          <CardTitle>Shot chart — this game</CardTitle>
+          <CardTitle>Shot chart for this game</CardTitle>
           {data.shots?.points?.length ? (
             <ShotChart points={data.shots.points} zones={data.shots.zones ?? []} height={400} />
           ) : (

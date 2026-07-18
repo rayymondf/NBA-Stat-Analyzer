@@ -7,7 +7,7 @@ A plain-English tour of every screen. No technical knowledge needed.
 The top bar is always there:
 
 - **NBA Stat Analyzer** (top left) — click to go home.
-- **Players · Compare · Games · AI Mode** — the four main areas.
+- **Players · Games · The Model · AI Mode** — the four main areas.
 - **Search players** (or press `Ctrl + K` anywhere) — the fastest way to open a
   player.
 - **Sun/moon icon** — switch between dark and light themes.
@@ -66,24 +66,47 @@ Three views, switchable with the buttons above the court:
 
 You can also filter the chart by quarter and by makes/misses.
 
+### Shot quality (ML)
+
+Next to the chart is a compact card powered by the app's machine-learning
+model (trained on about 657,000 real NBA shots; the card shows the exact
+number). It shows what an **average player would shoot from this player's
+exact shot locations and types** (expected eFG%) next to what they
+**actually** shot, plus a league percentile and per-zone breakdown. A green
+delta means they make more than those shots usually yield (shot-making
+skill); red means less. It is a model estimate built from shot locations and
+types only, never video. Click **"See the full model breakdown"** to open The
+Model with this player loaded.
+
 ### AI shortcuts on the profile
 
-Under the hero are clickable **✦ question chips** ("Is this recent form unusual?",
-"Compare this season with last season", "Find similar players…"). Clicking one
-opens AI Mode with that question already filled in and the player's context
+Under the hero are clickable **✦ question chips** ("How is this player playing
+lately?", "Does this player beat the shot-quality model?"). Clicking one opens
+AI Mode with that question already filled in and the player's context
 attached.
 
-## Compare
+## The Model
 
-Pick two players (click either slot → search). You get:
+The Model is the machine-learning section, with two modes:
 
-- A head-to-head bar for every stat (bold = the better value; for turnovers,
-  fouls and defensive rating, lower is better).
+**Player vs the Model** (the default). Pick any player. The model plays the
+part of an average NBA player taking that player's exact shots, and the page
+shows who shoots better: actual vs expected eFG%, a chart placing the player
+in the league-wide distribution, a zone-by-zone breakdown, and a calibration
+chart proving the model's predictions match reality on shots it never saw
+during training. The page also explains, step by step, how the model was
+built, and includes a link to **download the full training dataset as a CSV**
+you can open in Excel.
+
+**Player vs Player.** The classic head-to-head comparison:
+
+- A bar for every stat (bold = the better value; for turnovers, fouls and
+  defensive rating, lower is better).
 - A **Per game / Per 75** toggle so you can compare fairly regardless of pace.
 - Both players' **shot-zone charts** side by side.
 
-The page reminds you that winning one category doesn't make a player universally
-better — context matters.
+The page reminds you that winning one category doesn't make a player
+universally better; context matters.
 
 ## Games
 

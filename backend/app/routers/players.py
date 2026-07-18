@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from ..nba.seasons import current_season
-from ..services import (efficiency, fouls, frames, gamelog, impact, players,
-                        playtime, shooting, trends)
+from ..services import (efficiency, fouls, frames, gamelog, impact, ml,
+                        players, playtime, shooting, trends)
 
 router = APIRouter(prefix="/api/players", tags=["players"])
 
@@ -57,6 +57,12 @@ def shot_profile(player_id: int, season: str | None = None,
     profile["scoring_breakdown"] = shooting.scoring_breakdown(
         player_id, season, season_type)
     return profile
+
+
+@router.get("/{player_id}/shot-quality")
+def shot_quality(player_id: int, season: str | None = None,
+                 season_type: str = "Regular Season"):
+    return ml.shot_quality(player_id, season, season_type)
 
 
 @router.get("/{player_id}/efficiency")

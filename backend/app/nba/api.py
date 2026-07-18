@@ -99,6 +99,21 @@ def shot_chart(player_id: int, season: str, season_type: str = REGULAR,
     )
 
 
+def team_shot_chart(team_id: int, season: str,
+                    season_type: str = REGULAR) -> list[dict]:
+    """Every shot by one team in a season (player_id=0 = all players).
+    Used to build the xFG training set — 30 cached calls per season."""
+    data = fetch(
+        shotchartdetail.ShotChartDetail,
+        team_id=team_id,
+        player_id=0,
+        season_nullable=season,
+        season_type_all_star=season_type,
+        context_measure_simple="FGA",
+    )
+    return data.get("Shot_Chart_Detail", [])
+
+
 def general_splits(player_id: int, season: str, season_type: str = REGULAR,
                    measure: str = "Base", per_mode: str = "PerGame") -> dict:
     return fetch(

@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
-import { Card, Segmented } from "../components/ui";
+import { Card, HowItsMade, Segmented } from "../components/ui";
+
+const EXAMPLES = [
+  "Who are the top five scorers in the NBA this season?",
+  "How has Stephen Curry been playing in his last 10 games?",
+  "Compare Shai Gilgeous-Alexander and Luka Doncic this season",
+  "What are Victor Wembanyama's stats this season?",
+];
 
 type Mode = "auto" | "player" | "claim" | "compare" | "game";
 
@@ -226,11 +233,11 @@ export default function AiMode() {
     <div className="max-w-3xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
+          <h1 className="font-display text-2xl font-semibold flex items-center gap-2">
             <span style={{ color: "var(--series-7)" }}>✦</span> AI Mode
           </h1>
           <p className="text-xs text-ink-muted mt-0.5">
-            Answers are built from this app's computed stats — every claim shows its evidence.
+            Answers are built from this app's computed stats. Every claim shows its evidence.
           </p>
         </div>
         <Segmented
@@ -248,12 +255,26 @@ export default function AiMode() {
 
       <div className="space-y-4 mb-4">
         {turns.length === 0 && (
-          <Card className="text-sm text-ink-muted">
-            Ask anything about NBA players, games or claims — e.g. <em>"Is Jayson Tatum
-            inefficient in elimination games?"</em>, <em>"Compare Curry and Lillard as
-            three-point shooters"</em>, or open a game from the Games tab and ask why a team lost.
-            <br /><br />
-            The first question can take 20–60 seconds while data is fetched and analyzed.
+          <Card className="text-sm text-ink-muted section-in">
+            <p>
+              Ask anything about NBA players, games or claims, or start from one
+              of these:
+            </p>
+            <div className="grid sm:grid-cols-2 gap-2 mt-3">
+              {EXAMPLES.map((q) => (
+                <button
+                  key={q}
+                  onClick={() => submit(q)}
+                  className="text-left text-xs px-3 py-2.5 rounded-lg border border-edge text-ink-2 hover:text-ink hover:border-ink-muted transition-colors"
+                >
+                  <span style={{ color: "var(--series-7)" }}>✦</span> {q}
+                </button>
+              ))}
+            </div>
+            <p className="mt-3 text-xs">
+              The first question can take 20 to 60 seconds while data is fetched
+              and analyzed.
+            </p>
           </Card>
         )}
         {turns.map((t, i) => (
@@ -276,25 +297,48 @@ export default function AiMode() {
         <div ref={bottomRef} />
       </div>
 
-      <form
-        onSubmit={(e) => { e.preventDefault(); submit(input); }}
-        className="sticky bottom-4 card p-2 flex gap-2 shadow-xl"
-      >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about a player, a claim, a comparison or a game…"
-          className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-ink-muted"
-        />
-        <button
-          type="submit"
-          disabled={mutation.isPending || !input.trim()}
-          className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-opacity"
-          style={{ background: "var(--series-7)" }}
+      <div className="sticky bottom-0 pb-4">
+        <div className="h-8 -mb-4 pointer-events-none bg-gradient-to-t from-page to-transparent" />
+        <form
+          onSubmit={(e) => { e.preventDefault(); submit(input); }}
+          className="rounded-lg border-2 border-edge shadow-xl px-3 pt-2 pb-2 transition-colors focus-within:border-[var(--series-7)]"
+          style={{ background: "color-mix(in oklab, var(--series-7) 5%, var(--surface))" }}
         >
-          Ask
-        </button>
-      </form>
+          <div className="flex items-center justify-between">
+            <label htmlFor="ai-question" className="eyebrow" style={{ color: "var(--series-7)" }}>
+              Ask the analyst
+            </label>
+            <span className="text-[10px] text-ink-muted hidden sm:block">
+              Answers cite this app's computed stats
+            </span>
+          </div>
+          <div className="flex gap-2 items-center mt-0.5">
+            <input
+              id="ai-question"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type a question about a player, game, or claim"
+              className="flex-1 bg-transparent py-2 text-[15px] outline-none placeholder:text-ink-muted"
+            />
+            <button
+              type="submit"
+              disabled={mutation.isPending || !input.trim()}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-opacity shrink-0"
+              style={{ background: "var(--series-7)" }}
+            >
+              Ask ↑
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <HowItsMade>
+        Questions go to Google's Gemini API on its free tier. The AI never
+        invents numbers: it can only call this app's own statistical tools and
+        must cite what they return. Every report lists the exact analyses it
+        ran, and identical questions are answered from a local cache for 12
+        hours so no quota is wasted.
+      </HowItsMade>
     </div>
   );
 }

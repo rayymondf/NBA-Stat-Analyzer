@@ -30,7 +30,7 @@ export default function FoulsSection({ playerId, filters }: {
       <div className="space-y-3">
         <SkeletonCard lines={5} />
         <p className="text-xs text-ink-muted text-center">
-          First load parses recent play-by-play for foul types — can take ~15 seconds.
+          First load parses recent play-by-play for foul types. This can take ~15 seconds.
         </p>
       </div>
     );

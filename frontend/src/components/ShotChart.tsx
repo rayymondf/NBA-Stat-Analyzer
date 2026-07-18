@@ -217,7 +217,7 @@ export default function ShotChart({
                   textAnchor="middle" fontSize={15} fontWeight={700}
                   fill="#ffffff"
                 >
-                  {z.pct !== null ? `${Math.round(z.pct * 100)}%` : "—"}
+                  {z.pct !== null ? `${Math.round(z.pct * 100)}%` : "–"}
                 </text>
               </g>
             ))}

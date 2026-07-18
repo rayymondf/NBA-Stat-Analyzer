@@ -89,7 +89,7 @@ export default function GameLogSection({ playerId, filters }: {
         </tbody>
       </table>
       <p className="text-[11px] text-ink-muted p-3">
-        Click a date to open the full game view — shot chart, scoring timeline and boxscore line.
+        Click a date to open the full game view: shot chart, scoring timeline and boxscore line.
       </p>
     </Card>
   );

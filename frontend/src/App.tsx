@@ -9,6 +9,7 @@ const PlayerProfile = lazy(() => import("./pages/PlayerProfile"));
 const GameDetailPage = lazy(() => import("./pages/GameDetail"));
 const GamesPage = lazy(() => import("./pages/Games"));
 const ComparePage = lazy(() => import("./pages/Compare"));
+const ModelLab = lazy(() => import("./pages/ModelLab"));
 const AiMode = lazy(() => import("./pages/AiMode"));
 
 function ThemeToggle() {
@@ -30,8 +31,10 @@ function ThemeToggle() {
 }
 
 const navLink = ({ isActive }: { isActive: boolean }) =>
-  `px-3 py-1.5 rounded-lg text-sm transition-colors ${
-    isActive ? "bg-surface-2 text-ink font-medium" : "text-ink-muted hover:text-ink"
+  `px-2.5 py-1.5 text-[12px] uppercase tracking-[0.08em] font-medium transition-colors border-b-2 -mb-px ${
+    isActive
+      ? "text-ink border-ink"
+      : "text-ink-muted border-transparent hover:text-ink"
   }`;
 
 function DataFreshnessFooter() {
@@ -58,21 +61,23 @@ export default function App() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-edge bg-page/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
-          <NavLink to="/" className="flex items-center mr-2 shrink-0">
-            <span className="font-semibold text-sm tracking-tight">
+          <NavLink to="/" className="flex items-center mr-3 shrink-0">
+            <span className="font-display font-semibold text-lg tracking-tight">
               NBA Stat Analyzer
             </span>
           </NavLink>
-          <nav className="flex items-center gap-1">
-            <NavLink to="/" className={navLink} end>Players</NavLink>
-            <NavLink to="/compare" className={navLink}>Compare</NavLink>
-            <NavLink to="/games" className={navLink}>Games</NavLink>
-            <NavLink to="/ai" className={navLink}>
-              <span className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--series-7)" }} />
-                AI Mode
-              </span>
-            </NavLink>
+          <nav className="flex items-center gap-1 self-stretch">
+            <span className="flex items-center"><NavLink to="/" className={navLink} end>Players</NavLink></span>
+            <span className="flex items-center"><NavLink to="/games" className={navLink}>Games</NavLink></span>
+            <span className="flex items-center"><NavLink to="/model" className={navLink}>The Model</NavLink></span>
+            <span className="flex items-center">
+              <NavLink to="/ai" className={navLink}>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--series-7)" }} />
+                  AI Mode
+                </span>
+              </NavLink>
+            </span>
           </nav>
           <div className="flex-1" />
           <button
@@ -97,6 +102,7 @@ export default function App() {
             <Route path="/player/:id" element={<PlayerProfile />} />
             <Route path="/player/:id/game/:gameId" element={<GameDetailPage />} />
             <Route path="/games" element={<GamesPage />} />
+            <Route path="/model" element={<ModelLab />} />
             <Route path="/compare" element={<ComparePage />} />
             <Route path="/ai" element={<AiMode />} />
           </Routes>

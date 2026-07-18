@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { num, pct, teamLogo } from "../lib/format";
-import { Skeleton } from "../components/ui";
+import { HowItsMade, Skeleton } from "../components/ui";
 import FilterBar, { type ProfileFilters } from "../components/profile/FilterBar";
 import OverviewSection from "../components/profile/OverviewSection";
 import ShootingSection from "../components/profile/ShootingSection";
@@ -28,11 +28,11 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 const AI_CHIPS = (name: string, season?: string) => [
-  { q: `Is ${name}'s recent form statistically unusual?` },
-  { q: `Explain ${name}'s shooting profile — strengths and weaknesses.` },
-  { q: `Compare ${name}'s ${season ?? "current"} season with the previous season.` },
-  { q: `Find ${name}'s strongest and weakest matchups this season.` },
-  { q: `Find players with similar statistical profiles to ${name}.` },
+  { q: `How is ${name} playing lately?` },
+  { q: `What are ${name}'s shooting strengths and weaknesses?` },
+  { q: `Compare ${name}'s ${season ?? "current"} season to the previous one.` },
+  { q: `Does ${name} beat the shot-quality model this season?` },
+  { q: `Find players similar to ${name}.` },
 ];
 
 export default function PlayerProfile() {
@@ -84,7 +84,7 @@ export default function PlayerProfile() {
               />
               <div className="flex-1 min-w-52">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl font-bold tracking-tight">{summary.name}</h1>
+                  <h1 className="font-display text-3xl font-semibold tracking-tight">{summary.name}</h1>
                   {summary.team_id && (
                     <img src={teamLogo(summary.team_id)} alt="" className="w-8 h-8" />
                   )}
@@ -130,7 +130,7 @@ export default function PlayerProfile() {
                 </button>
               ))}
               <button
-                onClick={() => navigate(`/compare?a=${playerId}`)}
+                onClick={() => navigate(`/model?mode=h2h&a=${playerId}`)}
                 className="text-[11px] px-2.5 py-1 rounded-full border border-edge text-ink-2 hover:text-ink hover:border-ink-muted transition-colors"
               >
                 ⇄ Compare with another player
@@ -180,6 +180,15 @@ export default function PlayerProfile() {
           {section === "impact" && <ImpactSection playerId={playerId} filters={effFilters} />}
         </>
       )}
+      <HowItsMade>
+        Player data comes live from NBA.com's official stats through the free
+        nba_api library and is cached in a local SQLite database on this PC.
+        Every number, percentile and chart on these tabs is computed server
+        side with pandas from real game logs, shot charts and play-by-play.
+        Nothing here is estimated by AI; the one machine-learning number, the
+        shot-quality card in the Shooting tab, is clearly labeled as a model
+        estimate.
+      </HowItsMade>
     </div>
   );
 }
