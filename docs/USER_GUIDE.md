@@ -1,151 +1,343 @@
-# User Guide
+# User guide
 
-A plain-English tour of every screen. No technical knowledge needed.
+This guide explains every screen in NBA Stat Analyzer and how to interpret the
+main results. No programming knowledge is required. For installation, use the
+[project README](../README.md); for failures, use
+[Troubleshooting](TROUBLESHOOTING.md).
 
-## Getting around
+## Start and stop the app
 
-The top bar is always there:
+On the configured Windows PC, double-click `start-app.bat` in the project root.
+The browser opens <http://localhost:8000>. Keep the terminal window open. Press
+`Ctrl+C` in that window, or close it, to stop the backend.
 
-- **NBA Stat Analyzer** (top left) — click to go home.
-- **Players · Games · The Model · AI Mode** — the four main areas.
-- **Search players** (or press `Ctrl + K` anywhere) — the fastest way to open a
-  player.
-- **Sun/moon icon** — switch between dark and light themes.
+The first browser tab can appear before the server has finished starting. If it
+cannot connect, wait a few seconds and refresh.
 
-The **footer on every page** tells you exactly which season and date the data
-covers, e.g. *"Data: official NBA.com stats · 2025-26 season · games through
-2026-04-12."* Player lookup covers everyone who appeared during that season,
-plus current roster additions and injured/inactive players who recorded no
-appearances during the displayed season.
+## Navigation and data date
 
-## Finding a player
+The header is available on every page:
 
-1. Press `Ctrl + K` (or click **Search players**).
-2. Type a name — partial or out-of-order works ("giannis", "SGA", "luka").
-3. Click a result (or use arrow keys + Enter) to open their profile.
+- **NBA Stat Analyzer** and **Players** return to the home page.
+- **Games** opens the completed-game browser.
+- **The Model** contains Player vs Model and Player vs Player.
+- **AI Mode** opens the optional Gemini research assistant.
+- **Search players** or `Ctrl+K` opens global player search.
+- The sun/moon button changes the theme for the current page session. The theme
+  is not currently saved across a full refresh.
 
-Players with no games in the displayed season are labeled **Current roster · no
-2025-26 appearances**. Their profile can still be opened, but season dashboards
-will show that no games are available rather than inventing statistics.
+The footer shows:
 
-## The player profile
+- the season currently derived from the calendar;
+- the latest completed game date the backend found for that season;
+- the 12-hour refresh policy for current-season data;
+- what kinds of players are included in search.
 
-The top **hero** shows the headshot, team, number, position, age, and the
-headline averages (points, rebounds, assists, true shooting, field-goal and
-three-point percentages), plus a one-line summary of how they're playing.
+The season changes in October. During July through September, it is normal for
+the footer to show the completed season while player search already reflects
+some next-season roster moves.
 
-Under the hero are **eight tabs**:
+## Home page
 
-| Tab | What it shows |
-|-----|----------------|
-| **Overview** | The core box-score stats, plus percentile bars ("better than 84% of forwards") so you know what's good. |
-| **Shooting** | Field-goal / 3PT / 2PT / free-throw percentages, points per shot, and the interactive shot chart (see below). |
-| **Efficiency** | Advanced measures — true shooting, effective FG%, usage, assist-to-turnover, ratings — each with a plain-English tooltip. |
-| **Playtime** | Minutes per game, games played vs missed, starts vs bench, a game-by-game minutes-and-points chart, and clutch-time numbers. |
-| **Fouls** | Fouls per game and per 36 minutes, foul-out games, foul-trouble impact on minutes, and foul *types* (shooting/offensive/technical) from recent play-by-play. |
-| **Game Log** | Every game as a sortable table. Click any date to open the full game view. |
-| **Trends** | Rolling scoring and efficiency lines, whether recent form is unusual, and year-by-year career development. |
-| **Impact** | On-court vs off-court team performance (clearly labeled as an *estimate*). |
+The home page has four entry points:
 
-### The filter bar
+1. The large search button opens player search.
+2. The points-per-game leaderboard links to the top eight qualified scorers.
+3. The Model card opens the shot-quality model page.
+4. Example AI questions open AI Mode with a question already filled and sent.
 
-Below the tabs, the filters reshape the numbers: **season**, regular season vs
-playoffs, per-game / per-36 / per-75 / per-100, home/away, wins/losses,
-starter/bench, last 5/10/20 games, opponent, and a date range. Overview and Game
-Log respond to all of them; the other tabs follow the season and season-type.
+The leaderboard uses the same qualification rule as league percentiles: at
+least 10 games and 15 minutes per game. Very early in a season, this can leave
+the list short or empty.
 
-### The shot chart
+## Find a player
 
-Three views, switchable with the buttons above the court:
+1. Press `Ctrl+K` or select **Search players**.
+2. Enter at least two characters.
+3. Use the mouse, or the arrow keys and `Enter`, to choose a result.
 
-- **Shots** — every shot as a dot (made) or ✕ (missed). Hover any shot to see
-  the distance, result, type and game.
-- **Heatmap** — where the player shoots most often.
-- **Zones vs league** — each area colored blue (better than league average) to
-  red (worse), with the exact percentages listed below.
+Search accepts a partial name and multi-word parts in any order. If there is no
+direct match, it makes a conservative attempt to correct a misspelling.
 
-You can also filter the chart by quarter and by makes/misses.
+Each result can show current team, position, jersey, and current-season points,
+rebounds, and assists. A result labeled **Current roster, no [season]
+appearances** is still valid, but its profile tabs cannot show season statistics
+until that player records a game or a different season is selected.
 
-### Shot quality (ML)
+## Player profile
 
-Next to the chart is a compact card powered by the app's machine-learning
-model (trained on about 657,000 real NBA shots; the card shows the exact
-number). It shows what an **average player would shoot from this player's
-exact shot locations and types** (expected eFG%) next to what they
-**actually** shot, plus a league percentile and per-zone breakdown. A green
-delta means they make more than those shots usually yield (shot-making
-skill); red means less. It is a model estimate built from shot locations and
-types only, never video. Click **"See the full model breakdown"** to open The
-Model with this player loaded.
+The hero section shows bio information and six headline numbers: points,
+rebounds, assists, true shooting, field-goal percentage, and three-point
+percentage. It follows the selected season and season type, but not the
+game-level split filters described below.
 
-### AI shortcuts on the profile
+Question chips under the hero open AI Mode with the player ID and selected
+season attached. **Compare with another player** opens the Player vs Player
+model mode with the current player in the first slot.
 
-Under the hero are clickable **✦ question chips** ("How is this player playing
-lately?", "Does this player beat the shot-quality model?"). Clicking one opens
-AI Mode with that question already filled in and the player's context
-attached.
+### Filter scopes
+
+The filter bar is shared by all eight tabs, but not every control applies to
+every tab.
+
+| Control | Where it applies |
+|---|---|
+| Season | Hero and all profile tabs |
+| Regular season / Playoffs | Hero and all profile tabs |
+| Per game / Per 36 / Per 75 / Per 100 | Overview counting-stat tiles |
+| Home/away | Overview and Game Log |
+| Wins/losses | Overview and Game Log |
+| Starter/bench | Overview and Game Log, when starter data is available |
+| Last 5/10/20 | Overview and Game Log |
+| Opponent | Overview and Game Log |
+| Date range | Overview and Game Log |
+
+Percentages do not change when switching between per-game and possession/minute
+rate modes. Position percentiles always use full-season per-game league values,
+so they also remain fixed when applying game-level splits.
+
+The last-N option is applied after the other filters. For example, Boston +
+away + last 5 means the most recent five matching road games against Boston,
+not games drawn from the player's last five overall.
+
+### Overview
+
+Overview contains:
+
+- games, filtered record, starts, and the active rate mode;
+- points, rebounds, assists, steals, blocks, turnovers, fouls, plus-minus, and
+  true shooting;
+- position-group percentile bars.
+
+“Better than 84% of guards” compares the player's full-season value with guards
+who played at least 10 games and 15 minutes per game. For turnovers, fouls, and
+defensive rating, lower values receive higher percentiles.
+
+### Shooting
+
+The top tiles show overall field goals, two-pointers, three-pointers, field-goal
+points per attempt, average shot distance, and attempt count. Free throws are
+not part of the shot chart or field-goal points-per-shot value.
+
+The court has three views:
+
+- **Shots** displays each make and miss. Hover a point for distance, action,
+  period, game, and result.
+- **Heatmap** groups attempts into court bins. Darker cells mean more attempts,
+  not better accuracy.
+- **Zones vs league** colors basic zones by field-goal percentage difference
+  from NBA.com's league average for that zone. Blue is better, red is worse,
+  and gray is close to average.
+
+Quarter and make/miss controls filter the points shown on the chart. They do not
+recalculate the summary tiles, zone table, or xFG card.
+
+The right side also includes distance buckets and, when NBA data is available,
+assisted versus self-created makes and scoring-source percentages.
+
+#### Shot quality (ML)
+
+The ML card compares:
+
+- **Actual eFG%**: how the player actually converted, with three-pointers worth
+  1.5 makes in the effective-FG calculation.
+- **Expected eFG%**: what the local model predicts an average NBA player would
+  produce from the same recorded shots.
+- **Delta**: actual minus expected. Positive means outperformance of the modeled
+  shot mix; negative means underperformance.
+- **Percentile**: where that delta falls among players with at least 200 shots
+  in the model's saved training distribution.
+
+This is not a measure of shooting form or defender pressure. The model sees
+location, distance, angle, shot category, period, clock, and home/away status,
+not video, tracking data, or player identity. Open **See the full model
+breakdown** for calibration and training context.
+
+### Efficiency
+
+Efficiency shows true shooting, effective FG%, usage, assist-to-turnover ratio,
+turnover rate, free-throw rate, points per used possession, offensive rating,
+defensive rating, and net rating. Hover or select the glossary icons for short
+definitions.
+
+Advanced ratings describe production and team results in a role; they should
+not be treated as a context-free ranking of players. Position percentiles on
+this tab use the same full-season qualification pool as Overview.
+
+### Playtime
+
+Playtime shows:
+
+- minutes per game and total minutes;
+- games played and an estimated games-missed value;
+- starts and bench games;
+- fourth-quarter minutes;
+- minutes and points by game;
+- performance in minutes-played buckets;
+- minutes in games with five or more fouls;
+- clutch stats for the last five minutes of games within five points.
+
+Games missed is team games minus player appearances. It can be imperfect for a
+traded player or when team schedule data is incomplete.
+
+### Fouls
+
+Season-wide cards show personal fouls per game and per 36 minutes, total fouls,
+fouls drawn, five-foul games, foul-outs, and minutes in foul-trouble games.
+
+Foul types are parsed from play-by-play for at most the ten most recent games,
+not the entire season. The card states the actual number analyzed. Technical,
+offensive, shooting, loose-ball, personal, and unclassified fouls depend on the
+descriptions supplied by the feed.
+
+### Game Log
+
+Game Log lists the games that match every active split. The table is sortable
+and includes opponent, result, start status, minutes, basic box-score values,
+shooting line, true shooting, fouls, and plus-minus when available.
+
+Select a date to open a player-specific game page. That page contains the
+player’s line, individual shot chart, scoring events, score timeline, and the
+final team score. It is different from the ranked team-level investigation on
+the Games page.
+
+### Trends
+
+Trends compares the player's most recent ten games with the full season and
+plots rolling scoring, true shooting, minutes, shot volume, usage, and
+three-point attempt rate. If a player has fewer than 30 games, the rolling
+window automatically becomes smaller; the chart title shows the actual window.
+
+The scoring z-score asks whether the recent scoring mean is far from the season
+distribution. The interface marks an absolute score of 1.5 or greater as
+unusual. It is a descriptive signal and can be affected by opponents, role,
+injury, and minutes.
+
+Career development uses regular-season per-game rows. Players who changed teams
+can have more than one row for a season; the service excludes aggregate `TOT`
+rows when team-specific rows are present.
+
+### Impact
+
+Impact compares the team's offensive, defensive, and net ratings with the
+player on and off the court and can show up to two prior seasons when data is
+available.
+
+The net swing is on-court net rating minus off-court net rating per 100
+possessions. It is an observational estimate. Teammates, lineups, opponents,
+role, injuries, and schedule all influence it, so it is not a standalone causal
+player-value metric.
 
 ## The Model
 
-The Model is the machine-learning section, with two modes:
+The Model page has two modes. Both currently use the derived current regular
+season; the page does not expose the player-profile season/split filters.
 
-**Player vs the Model** (the default). Pick any player. The model plays the
-part of an average NBA player taking that player's exact shots, and the page
-shows who shoots better: actual vs expected eFG%, a chart placing the player
-in the league-wide distribution, a zone-by-zone breakdown, and a calibration
-chart proving the model's predictions match reality on shots it never saw
-during training. The page also explains, step by step, how the model was
-built, and includes a link to **download the full training dataset as a CSV**
-you can open in Excel.
+### Player vs the Model
 
-**Player vs Player.** The classic head-to-head comparison:
+Choose a player to see:
 
-- A bar for every stat (bold = the better value; for turnovers, fouls and
-  defensive rating, lower is better).
-- A **Per game / Per 75** toggle so you can compare fairly regardless of pace.
-- Both players' **shot-zone charts** side by side.
+- actual and expected eFG%, their delta, extra points per 100 field-goal
+  attempts, shot count, and delta percentile;
+- a histogram showing the saved league distribution;
+- zone-by-zone actual versus expected field-goal results for zones with at
+  least five attempts;
+- held-out calibration by distance;
+- the exact training seasons, sample, feature count, Brier score, AUC, and
+  baseline comparison read from the generated model file;
+- a CSV download of the exported shot dataset when it is present.
 
-The page reminds you that winning one category doesn't make a player
-universally better; context matters.
+If the page says the model has not been trained, follow the model instructions
+in [Troubleshooting](TROUBLESHOOTING.md#the-model-page-says-the-model-is-not-trained).
+
+### Player vs Player
+
+Choose a player in each slot. The comparison shows:
+
+- per-game or per-75 basic counting stats;
+- TS%, eFG%, 3P%, free-throw rate, assist-to-turnover ratio, usage, and ratings;
+- side-by-side zone shot charts.
+
+Bold indicates the better raw value. Turnovers, fouls, and defensive rating are
+treated as lower-is-better. A bold value is not adjusted for role, position,
+opponent, or uncertainty and does not establish that one player is universally
+better.
 
 ## Games
 
-The left panel lists completed games. Controls:
+Games lists completed games only, newest first. Use the season, regular
+season/playoffs, team, and date controls to narrow the list. The page requests
+up to 1,500 completed games for the selected season and team, displays 50 at a
+time, and applies the exact-date filter in the browser. **Show more** reveals the
+next 50 already loaded games.
 
-- **Season** dropdown — defaults to the current season; every past season stays
-  available.
-- **Regular Season / Playoffs**.
-- **Team** filter — narrow to one team's full schedule.
-- **Date** picker — jump to a specific day's games.
-- The header shows exactly what's listed: *"2025-26 Regular Season · newest
-  first · showing 50 of 1,225 games."* Use **Show more** to load older games.
+Select a game to run the team-level investigation. It shows:
 
-Click a game and the right side runs an **investigation**: the final score, a
-ranked list of the strongest reasons that team won or lost (shooting, turnovers,
-bench, star performances, scoring runs, fourth quarter), the four factors table,
-and star lines versus their season averages. Each reason shows evidence for and,
-where relevant, against it.
+- final score and winner;
+- ranked explanation cards;
+- effective FG%, turnover rate, offensive rebound rate, and free-throw factor;
+- the top-minute players versus their season scoring averages;
+- major unanswered runs;
+- fourth-quarter scoring when the game was close after three quarters;
+- evidence and counterevidence for the ranked factors.
+
+An explanation can favor the losing team. That means the winner overcame that
+factor; it is useful counterevidence. The ranking is a transparent statistical
+heuristic, not a film review or causal model.
+
+Game links from AI Mode can open `/games` with that game selected.
 
 ## AI Mode
 
-Type any NBA question, or open it pre-filled from a player or game page. Pick a
-mode if you want (**Auto** figures it out): Player, Claim check, Compare, or
-Game.
+AI Mode requires a valid Gemini key in `backend/.env`. Regular player, model,
+and game dashboards do not need the key.
 
-Every answer is a **report card**:
+Choose a mode when it helps:
 
-- A short written answer.
-- For claims, a **verdict** badge — Supported, Mostly supported, Mixed,
-  Misleading, Not supported, or Insufficient evidence.
-- **Evidence** rows with the exact numbers.
-- **Counterevidence & caveats** — the honest other side.
-- A collapsible **data scope** panel: which seasons, sample size, definitions,
-  filters, the model used, and the timestamp.
-- Clickable **chips** linking back to the players and games it analyzed.
+- **Auto** gives Gemini the full set of statistical tools.
+- **Player** focuses on one player's stats, shooting, form, history, similar
+  players, impact, elimination games, and xFG.
+- **Claim check** asks for a measurable definition and a verdict.
+- **Compare** narrows the tool set to player comparison evidence.
+- **Game** uses completed-game lookup and investigation only.
 
-If there isn't enough data, it says so instead of guessing. Early in a new
-season it automatically also looks at the previous season so answers aren't based
-on three games.
+A player or game shortcut supplies exact page context automatically. The first
+uncached answer can take 20 to 60 seconds or longer when NBA data is also
+uncached.
 
-See **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)** for what's happening behind the
-scenes, and **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** if something looks off.
+Each report can contain:
+
+- a short answer;
+- one of six claim verdicts: Supported, Mostly supported, Mixed, Misleading,
+  Not supported, or Insufficient evidence;
+- exact key findings;
+- counterevidence and caveats;
+- links to analyzed players and games;
+- confidence;
+- a collapsible panel with seasons, sample, filters, definitions, tool calls,
+  model, generation time, token usage, model attempts, and cache status.
+
+Questions shown in one browser session look like a conversation, but each
+submission is analyzed independently; previous answers are not sent back as
+chat history. Write self-contained follow-up questions and repeat the player or
+season name when needed.
+
+Identical successful questions with the same mode, context, model, prompt
+version, and current season are cached for 12 hours. A cached report uses no new
+Gemini quota and retains the original generation metadata.
+
+AI Mode is designed to ground numbers in the app's tools, and the trace makes
+those calls inspectable. It is still generated language. Verify high-stakes or
+surprising conclusions against the linked dashboard and data-scope panel.
+
+## Reading empty and error states
+
+- **No games match these filters** means the combination produced zero rows;
+  reset or loosen the split.
+- **No shot data** means NBA.com returned no attempts for that season/type, which
+  is common for zero-game players or a playoff season their team missed.
+- **No on/off data** means the team/player endpoint did not contain both on- and
+  off-court rows for that selection.
+- A loading skeleton is normal during an uncached request. Repeated errors or a
+  card that never resolves should be handled with
+  [Troubleshooting](TROUBLESHOOTING.md).
