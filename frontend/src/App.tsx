@@ -43,12 +43,19 @@ function DataFreshnessFooter() {
   return (
     <footer className="max-w-6xl mx-auto px-4 py-6 mt-8 border-t border-edge text-[11px] text-ink-muted flex flex-wrap gap-x-4 gap-y-1">
       <span>
-        Data: official NBA.com stats · <strong className="text-ink-2">{meta.current_season}</strong> season
+        Data: official NBA.com stats covering every game from the{" "}
+        <strong className="text-ink-2">{meta.seasons[meta.seasons.length - 1]}</strong> season through{" "}
+        <strong className="text-ink-2">{meta.current_season}</strong>
         {meta.data_through && (
-          <> · games through <strong className="text-ink-2">{meta.data_through}</strong></>
+          <>, up to the most recent game on <strong className="text-ink-2">{meta.data_through}</strong></>
         )}
+        .
       </span>
-      <span>Current-season numbers refresh every 12 hours; completed seasons are final.</span>
+      <span>
+        The current season ({meta.current_season}) refreshes every 12 hours while games are being
+        played; the nine seasons before it are complete and will never change. Each October the app
+        rolls forward to the new NBA season.
+      </span>
       <span>{meta.player_lookup_note}</span>
     </footer>
   );

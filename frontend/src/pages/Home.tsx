@@ -25,19 +25,21 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
       <section className="max-w-3xl mx-auto text-center pt-10 pb-12 section-in">
         <div className="eyebrow mb-3">The season, quantified</div>
         <h1 className="font-display text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05]">
-          Explore NBA stats.
-          <br />
-          <span style={{ color: "var(--series-1)" }}>Investigate what they mean.</span>
+          <span className="block sm:whitespace-nowrap">Explore NBA stats.</span>
+          <span className="block sm:whitespace-nowrap" style={{ color: "var(--series-1)" }}>
+            Investigate what they mean.
+          </span>
         </h1>
-        <p className="mt-5 text-ink-2 text-base max-w-xl mx-auto leading-relaxed">
-          Interactive shot charts, efficiency dashboards and trends for every
-          player, a trained shot-quality model, and an AI analyst that answers
-          questions with real, calculated evidence.
+        <p className="mt-5 text-ink-2 text-base max-w-2xl mx-auto leading-relaxed">
+          Shot charts, dashboards and trends for every player in the league —
+          <br className="hidden sm:block" /> plus a model trained on real NBA shots and an
+          AI analyst that proves every answer with the numbers.
         </p>
         {meta && (
           <p className="mt-3 text-xs text-ink-muted tracking-wide uppercase">
-            Live official NBA data · {meta.current_season} season
-            {meta.data_through && ` · through ${meta.data_through}`}
+            Official NBA.com stats · seasons {meta.seasons[meta.seasons.length - 1]} to{" "}
+            {meta.current_season}
+            {meta.data_through && ` · latest game: ${meta.data_through}`}
           </p>
         )}
         <button
@@ -48,7 +50,7 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
             <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
             <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          Search {meta?.current_season ?? "current"} and current roster players
+          Search any current NBA player
           <kbd className="ml-auto text-[10px] border border-edge rounded px-1.5 py-0.5">Ctrl K</kbd>
         </button>
         {meta && (

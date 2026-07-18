@@ -167,10 +167,12 @@ That default command does not call Gemini or consume quota. See
 - The cache is `backend/data/cache.sqlite`. It contains both NBA responses and
   cached successful AI reports. Deleting it is safe but removes all cached data
   and makes subsequent views download or recompute it again.
-- The displayed current season is derived from the calendar and changes in
-  October. The footer reports the most recent completed game date found for
-  that season. During the offseason, the completed season can remain the data
-  season while next-season roster details appear in search.
+- Coverage runs from the current NBA season to present, and the app rolls
+  into each new season automatically in October — no fixed end date. The
+  footer's date is just a freshness stamp: the most recent completed game
+  found for the current season, not a coverage cutoff. During the offseason,
+  the completed season can remain the data season while next-season roster
+  details appear in search.
 - The Gemini key remains in `backend/.env`. When AI Mode is used, the question,
   page context, system instructions, and results returned by selected stats
   tools are sent to Google's API. Regular dashboards do not call Gemini.

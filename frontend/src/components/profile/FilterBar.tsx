@@ -21,37 +21,46 @@ export default function FilterBar({ filters, onChange }: {
   const set = (patch: Partial<ProfileFilters>) => onChange({ ...filters, ...patch });
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <select
-        className={selectCls}
-        value={filters.season ?? ""}
-        onChange={(e) => set({ season: e.target.value })}
-      >
-        {(meta?.seasons ?? [filters.season]).map((s) => (
-          <option key={s} value={s ?? ""}>{s}</option>
-        ))}
-      </select>
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wider text-ink-muted w-14 shrink-0">
+          Season
+        </span>
+        <select
+          className={selectCls}
+          value={filters.season ?? ""}
+          onChange={(e) => set({ season: e.target.value })}
+        >
+          {(meta?.seasons ?? [filters.season]).map((s) => (
+            <option key={s} value={s ?? ""}>{s}</option>
+          ))}
+        </select>
 
-      <Segmented
-        options={[
-          { value: "Regular Season", label: "Regular" },
-          { value: "Playoffs", label: "Playoffs" },
-        ]}
-        value={(filters.season_type ?? "Regular Season") as string}
-        onChange={(v) => set({ season_type: v })}
-      />
+        <Segmented
+          options={[
+            { value: "Regular Season", label: "Regular" },
+            { value: "Playoffs", label: "Playoffs" },
+          ]}
+          value={(filters.season_type ?? "Regular Season") as string}
+          onChange={(v) => set({ season_type: v })}
+        />
 
-      <Segmented
-        options={[
-          { value: "per_game" as PerMode, label: "Per game" },
-          { value: "per_36" as PerMode, label: "Per 36" },
-          { value: "per_75" as PerMode, label: "Per 75" },
-          { value: "per_100" as PerMode, label: "Per 100" },
-        ]}
-        value={filters.perMode}
-        onChange={(v) => set({ perMode: v })}
-      />
+        <Segmented
+          options={[
+            { value: "per_game" as PerMode, label: "Per game" },
+            { value: "per_36" as PerMode, label: "Per 36" },
+            { value: "per_75" as PerMode, label: "Per 75" },
+            { value: "per_100" as PerMode, label: "Per 100" },
+          ]}
+          value={filters.perMode}
+          onChange={(v) => set({ perMode: v })}
+        />
+      </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wider text-ink-muted w-14 shrink-0">
+          Splits
+        </span>
       <select
         className={selectCls}
         value={filters.location ?? ""}
@@ -133,6 +142,7 @@ export default function FilterBar({ filters, onChange }: {
           Reset filters
         </button>
       )}
+      </div>
     </div>
   );
 }

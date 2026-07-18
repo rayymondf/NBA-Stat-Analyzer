@@ -24,12 +24,12 @@ export default function ModelLab() {
         title="The Model"
         dek={
           "Trained on hundreds of thousands of real NBA shots, the model " +
-          "learns the odds of making a shot from any court position, " +
-          "distance and situation. Pick a player and it estimates what an " +
-          "average NBA player would shoot from that same set of shots. " +
-          "Compare that to what the player actually shot, and you see who " +
-          "outperforms their shot selection versus who is just cashing in " +
-          "easy looks. Switch to Player vs Player for a classic head-to-head."
+          "learns the odds of a make from any court position, distance and " +
+          "situation. Pick a player: the model estimates what an average " +
+          "NBA player would shoot on that exact set of shots. The gap " +
+          "between that estimate and the player's actual shooting shows " +
+          "who outperforms their shot selection and who is cashing in easy " +
+          "looks. Switch to Player vs Player for a classic head-to-head."
         }
       />
       <div className="mb-5">

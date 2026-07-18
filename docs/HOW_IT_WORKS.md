@@ -78,9 +78,13 @@ NBA seasons are represented as strings such as `2025-26`.
 - From October through December, the current season starts in the current
   calendar year.
 - From January through September, it starts in the previous calendar year.
-- `/api/meta` returns the derived current season plus the previous nine seasons.
-- The footer's `data_through` value is the newest completed playoff or regular-
-  season game the backend can find for the derived current season.
+- `/api/meta` returns the derived current season plus the previous nine seasons,
+  so coverage runs from a player's or league's earliest tracked season through
+  whichever season is currently live — the app rolls forward automatically
+  each October rather than stopping at a fixed date.
+- The footer's `data_through` value is just a freshness stamp: the newest
+  completed playoff or regular-season game the backend has found for the
+  current season. It is not an end boundary on coverage.
 
 Search starts with everyone in the current season's Player Index. It then adds
 active players from the static `nba_api` registry so an injured or inactive

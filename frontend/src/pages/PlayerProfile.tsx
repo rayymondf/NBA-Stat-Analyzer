@@ -101,7 +101,7 @@ export default function PlayerProfile() {
                   {summary.experience != null && ` · ${summary.experience} seasons`}
                 </p>
               </div>
-              <div className="flex gap-6 text-center">
+              <div className="flex flex-wrap items-center gap-x-7 gap-y-3 text-center">
                 <Hero label="PPG" value={num(pg.PTS)} />
                 <Hero label="RPG" value={num(pg.REB)} />
                 <Hero label="APG" value={num(pg.AST)} />
@@ -115,7 +115,7 @@ export default function PlayerProfile() {
             <p className="mt-4 text-sm text-ink-2 max-w-3xl leading-relaxed">{summary.blurb}</p>
           )}
           {summary && (
-            <div className="mt-3 flex gap-2 flex-wrap">
+            <div className="mt-4 pt-4 border-t border-edge flex gap-2 flex-wrap">
               {AI_CHIPS(summary.name, season).map((c) => (
                 <button
                   key={c.q}
@@ -158,10 +158,10 @@ export default function PlayerProfile() {
       </div>
 
       {/* ---- Filters ---- */}
-      <div className="mb-4">
+      <div className="card p-4 mb-5">
         <FilterBar filters={effFilters} onChange={setFilters} />
         {["shooting", "efficiency", "playtime", "fouls", "trends", "impact"].includes(section) && (
-          <p className="text-[11px] text-ink-muted mt-1.5">
+          <p className="text-[11px] text-ink-muted mt-2.5">
             This section follows the season and season-type filters; game-level splits apply to Overview and Game Log.
           </p>
         )}

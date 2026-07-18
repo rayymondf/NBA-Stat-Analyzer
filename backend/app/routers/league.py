@@ -34,13 +34,16 @@ def meta():
         "season_types": ["Regular Season", "Playoffs"],
         "data_through": data_through,
         "player_lookup_note": (
-            f"Player lookup covers everyone who appeared in {cur}, plus "
-            "current roster additions and injured/inactive players with no "
-            f"{cur} appearances."),
+            "Player search covers today's NBA players: everyone who has "
+            f"played in {cur}, plus current roster players yet to appear "
+            "this season (injured, inactive or newly signed). Retired "
+            "players are not searchable."),
         "freshness_note": (
-            f"Official NBA.com statistics through the {cur} season. "
-            "Current-season numbers refresh automatically every 12 hours; "
-            "completed seasons are final."),
+            f"Official NBA.com statistics for the {seasons[-1]} through "
+            f"{cur} seasons. {cur} stats refresh every 12 hours during the "
+            "season; earlier seasons are complete and will not change. The "
+            "app rolls forward to each new NBA season automatically every "
+            "October."),
     }
 
 
