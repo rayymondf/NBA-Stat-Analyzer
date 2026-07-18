@@ -1,12 +1,54 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
+import { api, type ShotPoint } from "../../lib/api";
 import SearchPalette from "../SearchPalette";
-import { AnimatedNumber, Card, CardTitle, ErrorState, GlossaryTip, Skeleton } from "../ui";
+import ShotChart from "../ShotChart";
+import { AnimatedNumber, Card, CardTitle, ErrorState, GlossaryTip, Segmented, Skeleton } from "../ui";
 import DeltaHistogram from "./DeltaHistogram";
 import CalibrationChart from "./CalibrationChart";
 import ZoneDeltaBars from "./ZoneDeltaBars";
+
+/** The player's real shot chart with adjustable views and filters. */
+function ShotSelectionCard({ playerId, name }: { playerId: number; name?: string }) {
+  const [result, setResult] = useState<"all" | "made" | "missed">("all");
+  const { data } = useQuery({
+    queryKey: ["shooting", playerId, undefined, undefined],
+    queryFn: () => api.shooting(playerId, {}),
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const points: ShotPoint[] = useMemo(() => {
+    let pts = data?.points ?? [];
+    if (result !== "all") pts = pts.filter((p: ShotPoint) => p.made === (result === "made"));
+    return pts;
+  }, [data, result]);
+
+  if (!data?.points?.length) return null;
+  return (
+    <Card className="section-in">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <CardTitle>{name ? `${name}'s shot selection` : "Shot selection"}</CardTitle>
+        <Segmented
+          options={[
+            { value: "all" as const, label: "All shots" },
+            { value: "made" as const, label: "Makes" },
+            { value: "missed" as const, label: "Misses" },
+          ]}
+          value={result}
+          onChange={setResult}
+        />
+      </div>
+      <ShotChart points={points} zones={data.zones ?? []} defaultView="dots" height={420} />
+      <p className="text-[11px] text-ink-muted mt-2">
+        These are the exact shots the model grades: every dot's position, distance
+        and type is what the model uses to compute this player's expected
+        effective field goal %.
+        Zones view colors each area blue (better than league average) to red (worse).
+      </p>
+    </Card>
+  );
+}
 
 /** Pick one player; the model plays the "average NBA player" taking the same shots. */
 export default function VsModelMode() {
@@ -93,7 +135,7 @@ export default function VsModelMode() {
                   <AnimatedNumber value={quality.actual_efg * 100} format={(n) => `${n.toFixed(1)}%`} />
                 </div>
                 <div className="text-[11px] uppercase tracking-wider text-ink-muted mt-1">
-                  {name ? `${name}'s actual eFG%` : "Actual eFG%"}
+                  {name ? `${name}'s actual effective field goal %` : "Actual effective field goal %"}
                 </div>
               </div>
               <div>
@@ -101,7 +143,7 @@ export default function VsModelMode() {
                   <AnimatedNumber value={quality.expected_efg * 100} format={(n) => `${n.toFixed(1)}%`} />
                 </div>
                 <div className="text-[11px] uppercase tracking-wider text-ink-muted mt-1 flex items-center gap-1">
-                  Average player, same shots <GlossaryTip term="XFG" />
+                  Same shots, average player's expected effective field goal % <GlossaryTip term="XFG" />
                 </div>
               </div>
               <div>
@@ -145,6 +187,8 @@ export default function VsModelMode() {
               <ZoneDeltaBars zones={quality.zones ?? []} />
             </Card>
           </div>
+
+          <ShotSelectionCard playerId={playerId} name={name} />
 
           {(info?.calibration_by_distance?.length ?? 0) > 0 && (
             <Card className="section-in">

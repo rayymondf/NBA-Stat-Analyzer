@@ -75,7 +75,7 @@ export default function DeltaHistogram({ distribution, playerDelta, playerName }
       <p className="text-[11px] text-ink-muted mt-1">
         Every qualified NBA player (200+ shots over the training seasons),
         placed by how far their actual shooting sits above or below the
-        model's expectation, in eFG percentage points. Zero means exactly
+        model's expectation, in effective field goal percentage points. Zero means exactly
         as expected.
       </p>
     </div>

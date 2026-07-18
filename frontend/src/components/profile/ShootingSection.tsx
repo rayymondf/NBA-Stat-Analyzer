@@ -106,12 +106,12 @@ export default function ShootingSection({ playerId, filters }: {
               <div className="flex items-baseline gap-3 mb-2">
                 <div>
                   <div className="text-lg font-semibold tnum">{pct(quality.actual_efg)}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-ink-muted">Actual eFG%</div>
+                  <div className="text-[10px] uppercase tracking-wider text-ink-muted">Actual effective field goal %</div>
                 </div>
                 <div className="text-ink-muted text-xs">vs</div>
                 <div>
                   <div className="text-lg font-semibold tnum">{pct(quality.expected_efg)}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-ink-muted">Expected (xFG)</div>
+                  <div className="text-[10px] uppercase tracking-wider text-ink-muted">Expected effective field goal %</div>
                 </div>
                 <span
                   className="ml-auto text-xs font-semibold tnum px-2 py-0.5 rounded-full"

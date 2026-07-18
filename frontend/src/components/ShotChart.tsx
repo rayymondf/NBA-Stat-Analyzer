@@ -72,15 +72,16 @@ function diffColor(diff: number | null) {
 }
 
 export default function ShotChart({
-  points, zones, view, onViewChange, height = 460,
+  points, zones, view, onViewChange, defaultView = "dots", height = 460,
 }: {
   points: ShotPoint[];
   zones: Zone[];
   view?: ShotView;
   onViewChange?: (v: ShotView) => void;
+  defaultView?: ShotView;
   height?: number;
 }) {
-  const [internalView, setInternalView] = useState<ShotView>("dots");
+  const [internalView, setInternalView] = useState<ShotView>(defaultView);
   const v = view ?? internalView;
   const setV = onViewChange ?? setInternalView;
   const [hover, setHover] = useState<{ px: number; py: number; p: ShotPoint } | null>(null);

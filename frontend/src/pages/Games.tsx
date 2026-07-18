@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { signed, num, pct } from "../lib/format";
-import { Card, CardTitle, ErrorState, HowItsMade, PageHeader, Skeleton } from "../components/ui";
+import { Card, CardTitle, ErrorState, GlossaryTip, HowItsMade, PageHeader, Skeleton } from "../components/ui";
 
 const TEAMS = ["","ATL","BOS","BKN","CHA","CHI","CLE","DAL","DEN","DET","GSW","HOU","IND","LAC","LAL","MEM","MIA","MIL","MIN","NOP","NYK","OKC","ORL","PHI","PHX","POR","SAC","SAS","TOR","UTA","WAS"];
 
@@ -252,7 +252,11 @@ function Investigation({ gameId }: { gameId: string }) {
             <thead>
               <tr className="text-ink-muted text-left">
                 <th className="py-1 font-medium">Team</th>
-                <th className="text-right font-medium">eFG%</th>
+                <th className="text-right font-medium">
+                  <span className="inline-flex items-center gap-1">
+                    Eff. FG% <GlossaryTip term="EFG_PCT" />
+                  </span>
+                </th>
                 <th className="text-right font-medium">TOV%</th>
                 <th className="text-right font-medium">ORB%</th>
                 <th className="text-right font-medium">FT rate</th>

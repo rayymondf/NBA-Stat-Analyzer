@@ -28,9 +28,9 @@ export const GLOSSARY: Record<string, string> = {
     "On/off: how the team performs with this player on court vs on the bench. An estimate: lineups and opponents make it noisy in small samples.",
   FG3A_RATE: "3-point attempt rate: the share of field-goal attempts taken from three.",
   XFG:
-    "Shot quality (xFG): a machine-learning model trained on real NBA shots estimates what an average NBA player would shoot from this player's exact shot locations and types. Making more than expected means shot-making skill beyond shot selection. A model estimate built from shot locations and types only, never video.",
+    "Shot quality: a machine-learning model trained on real NBA shots estimates the expected effective field goal percentage an average NBA player would shoot from this player's exact shot locations and types. Making more than expected means shot-making skill beyond shot selection. A model estimate built from shot locations and types only, never video.",
   POSS: "Possessions: team possessions while the player was on the floor.",
   CLUTCH: "Clutch: the last 5 minutes of a game with the score within 5 points.",
   FOUR_FACTORS:
-    "Four factors: shooting (eFG%), turnovers, offensive rebounding and free throws. The four things that decide games.",
+    "Four factors: shooting (effective field goal percentage), turnovers, offensive rebounding and free throws. The four things that decide games.",
 };

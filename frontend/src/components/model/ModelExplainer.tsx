@@ -55,10 +55,10 @@ export default function ModelExplainer() {
           Using scikit-learn (free, runs on this PC), hundreds of small
           decision trees are built in sequence, each correcting the mistakes
           of the ones before it. The finished model can estimate, for any
-          shot, the chance an average NBA player makes it. That estimate is
-          called xFG, short for expected Field Goal percentage: the shooting
-          percentage a player would be expected to have if they converted
-          each shot at the average NBA rate.
+          shot, the chance an average NBA player makes it. Averaged across a
+          player's real shots, that becomes the expected effective field goal
+          percentage: what an average NBA player would be expected to shoot
+          from those same shots.
         </Step>
         <Step n={4} title="Then it is graded honestly">
           {m.n_test?.toLocaleString() ?? "Tens of thousands of"} shots were

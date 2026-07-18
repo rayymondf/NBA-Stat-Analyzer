@@ -52,6 +52,19 @@ export default function HeadToHead() {
     enabled: !!a && !!b,
   });
 
+  // Fetch each slot's bio independently so a picked player shows up right
+  // away, not only once BOTH players are picked and /compare resolves.
+  const { data: infoA } = useQuery({
+    queryKey: ["summary", a],
+    queryFn: () => api.summary(a!),
+    enabled: !!a,
+  });
+  const { data: infoB } = useQuery({
+    queryKey: ["summary", b],
+    queryFn: () => api.summary(b!),
+    enabled: !!b,
+  });
+
   const setPlayer = (slot: "a" | "b", id: number) => {
     const next = new URLSearchParams(params);
     next.set(slot, String(id));
@@ -61,8 +74,8 @@ export default function HeadToHead() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <PlayerSlot color={A_COLOR} info={data?.a?.info} label="Player A" onPick={() => setPicking("a")} />
-        <PlayerSlot color={B_COLOR} info={data?.b?.info} label="Player B" onPick={() => setPicking("b")} />
+        <PlayerSlot color={A_COLOR} info={data?.a?.info ?? infoA} label="Player A" onPick={() => setPicking("a")} />
+        <PlayerSlot color={B_COLOR} info={data?.b?.info ?? infoB} label="Player B" onPick={() => setPicking("b")} />
       </div>
 
       {!a || !b ? (
@@ -125,9 +138,9 @@ export default function HeadToHead() {
               <Card key={slot}>
                 <CardTitle>
                   <span style={{ color: slot === "a" ? A_COLOR : B_COLOR }}>●</span>{" "}
-                  {data[slot].info?.name}: shot zones vs league
+                  {data[slot].info?.name}: shot chart
                 </CardTitle>
-                <ShotChart points={data[slot].shot_points ?? []} zones={data[slot].zones ?? []} view="zones" onViewChange={() => {}} height={360} />
+                <ShotChart points={data[slot].shot_points ?? []} zones={data[slot].zones ?? []} defaultView="zones" height={360} />
               </Card>
             ))}
           </div>

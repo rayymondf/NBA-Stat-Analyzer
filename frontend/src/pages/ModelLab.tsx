@@ -23,16 +23,13 @@ export default function ModelLab() {
         kicker="Machine learning"
         title="The Model"
         dek={
-          "The Model is a machine-learning program that studied hundreds of " +
-          "thousands of real NBA shots and learned how often shots go in from " +
-          "every spot on the court. When you pick a player, the model plays " +
-          "the part of an average NBA player taking that player's exact " +
-          "shots, one by one, and predicts what an average player would " +
-          "shoot from them. Comparing that prediction with what your player " +
-          "actually shot shows whether they make more or less than their " +
-          "shots deserve: real shot-making skill, separated from easy or " +
-          "hard shot selection. You can also switch to a classic player vs " +
-          "player comparison."
+          "Trained on hundreds of thousands of real NBA shots, the model " +
+          "learns the odds of making a shot from any court position, " +
+          "distance and situation. Pick a player and it estimates what an " +
+          "average NBA player would shoot from that same set of shots. " +
+          "Compare that to what the player actually shot, and you see who " +
+          "outperforms their shot selection versus who is just cashing in " +
+          "easy looks. Switch to Player vs Player for a classic head-to-head."
         }
       />
       <div className="mb-5">
