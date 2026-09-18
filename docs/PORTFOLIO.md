@@ -32,6 +32,17 @@ Use or adapt only after the final CI run remains green:
   tab-level code splitting while preserving strict types and accessibility.
 - Automated locked backend/frontend tests, API contract drift, container builds,
   scheduled retraining, gated artifact publication, and attested GHCR releases.
+- Added file-backed MLflow experiment tracking and a model registry to the
+  training pipeline: runs log parameters, per-candidate tuning metrics, test
+  metrics, baseline deltas, and calibration/drift/slice artifacts, and only a
+  gate-passing candidate is registered — mirroring the atomic promotion gate.
+- Hardened the public contract with explicit, discriminated-union Pydantic DTOs
+  (model-info, shot explainer) and derived the strict TypeScript client types
+  directly from the generated OpenAPI, making server/client drift a compile
+  error.
+- Shipped a SHAP-based shot-difficulty explainer (endpoint + UI panel) that
+  attributes the model's per-shot make-probability to its inputs, labeled as
+  model attribution rather than causal or pure-talent measurement.
 
 ## Five-minute demo
 
@@ -63,14 +74,31 @@ Use or adapt only after the final CI run remains green:
 
 ## Next depth, in priority order
 
-1. Run fresh v3 ingestion and publish the first passing candidate/report.
-2. Replace remaining generic response roots with explicit domain DTOs and derive
-   frontend domain types directly from OpenAPI.
-3. Capture a public warm-cache Locust report and browser accessibility audit.
+Done in the latest iteration:
+
+- Ran a fresh, ID-complete three-season v3 ingestion and trained/evaluated a
+  candidate with full MLflow tracking. The gate correctly withheld promotion
+  (calibration non-inferiority against a constant baseline), so v3 remains an
+  honest candidate rather than a deployed claim.
+- Replaced the model-info and shot-explainer JSON roots with explicit DTOs and
+  derived frontend domain types directly from OpenAPI.
+- Added a SHAP shot-difficulty explainer endpoint and UI panel.
+- Navigation/IA overhaul and visual refresh, verified live with a browser
+  accessibility/UX pass.
+
+Deferred (future improvements):
+
+1. Promote the first v3 candidate that passes against a temporally eligible
+   incumbent (not just the constant baseline).
+2. Replace the remaining generic analytics response roots with explicit DTOs.
+3. Capture a public warm-cache Locust report to accompany the browser audit.
 4. Move coordination to Redis and demonstrate two replicas if scale is part of
    the target role.
-5. Add OpenTelemetry traces, SBOM/container scanning, and hosted dashboards.
-6. Add a tracking-data provider only if licensing and reproducibility are clear;
+5. Add OpenTelemetry traces, SBOM/container scanning, and hosted MLflow/metrics
+   dashboards.
+6. Track the large training CSV with git-lfs (or drop it from history) since it
+   is a ~93 MB file in the repository.
+7. Add a tracking-data provider only if licensing and reproducibility are clear;
    it would materially improve contest/context modeling.
 
 These are deliberate next increments, not hidden claims about the current repo.

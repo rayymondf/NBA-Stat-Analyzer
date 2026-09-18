@@ -89,6 +89,13 @@ and gate decision. Promotion checks a caller-supplied SHA-256 before joblib
 deserialization, verifies the recorded gate, copies to a staging file, checks
 the copy, and atomically replaces production.
 
+Each training run is optionally recorded to a local file-backed MLflow store
+(`nba-pipeline train --mlflow`): parameters, per-candidate tuning metrics, final
+test metrics, baseline comparison, clustered-bootstrap interval widths, and
+calibration/drift/slice/promotion artifacts. Only a gate-passing candidate is
+registered as a versioned model in the local MLflow registry, mirroring the
+promotion gate. See [ADR 0004](adr/0004-mlflow-experiment-tracking.md).
+
 Remote bootstrap downloads `index.json`, validates its schema, filename, size,
 and pinned SHA-256, streams within a size limit, then deserializes only the
 verified local file. This protects integrity, not the safety of an untrusted
@@ -120,8 +127,11 @@ are in [DEPLOYMENT.md](DEPLOYMENT.md).
   scale. See [ADR 0001](adr/0001-local-cache.md).
 - `nba_api` wraps an unofficial public NBA.com interface. The project controls
   its own failure budget but cannot guarantee upstream availability.
-- Pydantic response roots currently ensure JSON-shaped contracts while richer
-  frontend domain types capture the detailed payload. Adding explicit DTOs for
-  every analytics response remains worthwhile before third-party API consumers.
+- The public boundary is moving from generic JSON-shaped roots to explicit
+  Pydantic DTOs. `/api/v1/ml/model-info` and the shot-difficulty explainer now
+  return named, discriminated-union schemas, and the frontend derives those
+  types directly from the committed OpenAPI (`schema.d.ts`) so the client cannot
+  drift from the server. Remaining analytics responses still use JSON roots and
+  are the next DTO increment.
 - No authentication is included. Public deployment is read-only and rate
   limited, but AI Mode should remain disabled or protected if it carries quota.

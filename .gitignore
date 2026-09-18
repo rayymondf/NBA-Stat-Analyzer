@@ -22,8 +22,10 @@ backend/.venv/
 backend/mlruns/
 backend/data/processed/
 backend/data/raw/
+backend/data/staging/
 backend/data/manifests/
 backend/data/artifacts/
+.playwright-mcp/
 backend/data/*.sqlite-shm
 backend/data/*.sqlite-wal
 

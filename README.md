@@ -21,7 +21,11 @@ lineage, observability, container delivery, and accessible product UX.
   queries, and verified local/S3-compatible artifacts.
 - xFG v3 training code with date-grouped temporal folds, separate tuning and
   calibration periods, out-of-fold empirical-Bayes priors, clustered bootstrap
-  intervals, calibration/drift/slice reports, and an atomic promotion gate.
+  intervals, calibration/drift/slice reports, file-backed MLflow tracking with a
+  gated model registry, and an atomic promotion gate.
+- Explicit, discriminated-union API DTOs for the model surface with strict
+  TypeScript client types derived directly from the generated OpenAPI, plus a
+  SHAP shot-difficulty explainer endpoint and UI panel.
 - Strict TypeScript, generated OpenAPI surface checks, TanStack Query async states,
   accessible search/filter controls, lazy routes/tabs, and deterministic Vitest
   coverage.

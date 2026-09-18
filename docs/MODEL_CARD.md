@@ -15,6 +15,27 @@ There are two distinct statuses:
   calibration, uncertainty, drift, and promotion controls. No v3 production
   score is reported until fresh complete data passes its gate.
 
+### Latest v3 candidate (trained, evaluated, not promoted)
+
+A v3 candidate was trained on a freshly ingested, ID-complete three-season
+dataset (`shots-v1-12a766786e75`, 657,387 shots: 2023-24 218,700; 2024-25
+219,527; 2025-26 219,160). The selected model was histogram gradient boosting.
+On the held-out temporal test fold it reported Brier 0.2251, ROC AUC 0.660,
+average precision 0.668, log loss 0.639, and ECE 0.0064.
+
+The promotion gate **did not pass**, so the candidate was **not** promoted and
+v3 is **not** claimed as deployed. The critical slice checks passed. The paired
+non-inferiority test failed on a single metric — expected calibration error —
+because the eligible baseline was the constant train-rate baseline, which is
+trivially perfectly calibrated (ECE near zero). The paired ECE delta interval
+(about 0.0006 to 0.0082) exceeds the 0.005 tolerance against that baseline even
+though the candidate is far better on Brier, AUC, average precision, and log
+loss. This is the gate behaving as designed: it refuses to ship on a calibration
+technicality against a weak baseline, and comparisons against a temporally
+eligible production incumbent are stronger than against a constant baseline. The
+run, metrics, calibration/drift/slice artifacts, and gate decision are recorded
+in MLflow (see below).
+
 The local joblib artifact and training export are ignored deployment data, not
 source-controlled release assets.
 
@@ -85,6 +106,16 @@ uncertainty.
 
 - API exports loaded model version/dataset identity as a Prometheus gauge.
 - Model info exposes recorded evaluation, drift, calibration, and intervals.
+- Training logs each run to a local file-backed MLflow store (`--mlflow`):
+  parameters, per-candidate tuning metrics, final test metrics, baseline
+  comparison, clustered-bootstrap interval widths, and calibration/drift/slice
+  artifacts. A gate-passing candidate is registered as a versioned model in the
+  local MLflow registry; a failing candidate is logged for history but never
+  registered. Browse with `mlflow ui`.
+- The `/api/v1/ml/players/{id}/shot-explainer` endpoint reports per-feature SHAP
+  contributions to the model's make-probability estimate. It attributes the
+  model's estimate to its inputs and is explicitly not a causal or pure-talent
+  measure.
 - A weekly in-season workflow rebuilds data and a candidate but publishes only
   a passing release.
 - Alert candidates at PSI >= 0.25; review at PSI >= 0.10.
