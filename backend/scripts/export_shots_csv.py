@@ -1,40 +1,35 @@
-"""Dump the raw shot dataset the xFG model was trained on to a plain CSV file
-you can open in Excel.
+"""Export a human-readable CSV from the resumable raw shot partitions."""
 
-    backend\\venv\\Scripts\\python.exe backend\\scripts\\export_shots_csv.py
+from __future__ import annotations
 
-Reuses the same cached NBA.com data as train_models.py, so this is fast
-(no new downloads) if you've already trained the model.
-"""
-import os
-import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+import pandas as pd
 
-from scripts.train_models import collect_shots, train_seasons  # noqa: E402
+from app.nba.seasons import current_season, previous_season
+from app.pipeline.ingest import ingest_shots
 
-OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "shots_export.csv")
-
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 COLUMNS = [
-    "PLAYER_NAME", "TEAM_NAME", "SEASON", "GAME_DATE", "PERIOD",
-    "MINUTES_REMAINING", "SECONDS_REMAINING",
+    "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "TEAM_NAME", "SEASON", "GAME_ID",
+    "GAME_EVENT_ID",
+    "GAME_DATE", "PERIOD", "MINUTES_REMAINING", "SECONDS_REMAINING",
     "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA", "ACTION_TYPE", "SHOT_TYPE",
     "SHOT_DISTANCE", "LOC_X", "LOC_Y", "HTM", "VTM", "SHOT_MADE_FLAG",
 ]
 
 
 def main() -> None:
-    seasons = train_seasons()
-    print(f"Collecting shots for {seasons} (uses cache if already trained) …")
-    shots = collect_shots(seasons)
-
-    cols = [c for c in COLUMNS if c in shots.columns]
-    out = shots[cols].copy()
-    out["SHOT_MADE_FLAG"] = out["SHOT_MADE_FLAG"].map({1: "Made", 0: "Missed"})
-
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    out.to_csv(OUT_PATH, index=False)
-    print(f"\nWrote {len(out):,} shots -> {os.path.abspath(OUT_PATH)}")
+    newest = current_season()
+    seasons = [newest, previous_season(newest), previous_season(previous_season(newest))]
+    result = ingest_shots(seasons, DATA_DIR / "raw" / "shots")
+    frame = pd.concat((pd.read_parquet(path) for path in result.paths), ignore_index=True)
+    columns = [column for column in COLUMNS if column in frame.columns]
+    export = frame[columns].copy()
+    export["SHOT_MADE_FLAG"] = export["SHOT_MADE_FLAG"].replace({1: "Made", 0: "Missed"})
+    output = DATA_DIR / "shots_export.csv"
+    export.to_csv(output, index=False)
+    print(f"Wrote {len(export):,} shots to {output}")
 
 
 if __name__ == "__main__":

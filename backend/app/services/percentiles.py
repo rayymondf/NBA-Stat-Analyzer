@@ -63,7 +63,7 @@ def percentile_of(pool: pd.Series, value: float, invert: bool = False) -> int:
     pct = (pool < value).mean() * 100
     if invert:
         pct = 100 - pct
-    return int(round(pct))
+    return round(pct)
 
 
 def player_percentiles(player_id: int, season: str,
@@ -80,22 +80,22 @@ def player_percentiles(player_id: int, season: str,
         me = df[df["PLAYER_ID"] == player_id]
         if me.empty:
             continue
-        me = me.iloc[0]
-        peers = df[df["POS_GROUP"] == me["POS_GROUP"]]
+        player_row = me.iloc[0]
+        peers = df[df["POS_GROUP"] == player_row["POS_GROUP"]]
         cols = stats or [c for c in df.columns
                          if df[c].dtype != object and c not in
                          ("PLAYER_ID", "TEAM_ID", "AGE", "GP", "W", "L")]
         for col in cols:
             if col in result or col not in df.columns:
                 continue
-            val = me[col]
+            val = player_row[col]
             if pd.isna(val):
                 continue
             result[col] = {
                 "value": float(val),
                 "percentile": percentile_of(peers[col], val,
                                             invert=col in LOWER_IS_BETTER),
-                "position_group": me["POS_GROUP"],
-                "pool_size": int(len(peers)),
+                "position_group": player_row["POS_GROUP"],
+                "pool_size": len(peers),
             }
     return result

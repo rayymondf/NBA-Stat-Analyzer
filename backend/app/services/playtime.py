@@ -1,5 +1,4 @@
 """Playing time, availability, foul-trouble impact, clutch/Q4 minutes."""
-import pandas as pd
 
 from ..nba import api
 from . import frames
@@ -45,7 +44,7 @@ def playtime(player_id: int, season: str,
             continue
         by_minutes.append({
             "bucket": label,
-            "games": int(len(g)),
+            "games": len(g),
             "pts": round(float(g["PTS"].mean()), 1),
             "reb": round(float(g["REB"].mean()), 1),
             "ast": round(float(g["AST"].mean()), 1),
@@ -57,7 +56,7 @@ def playtime(player_id: int, season: str,
     foul_trouble = df[df["PF"] >= 5]
     normal = df[df["PF"] < 5]
     foul_impact = {
-        "games_5plus_fouls": int(len(foul_trouble)),
+        "games_5plus_fouls": len(foul_trouble),
         "avg_min_foul_trouble": round(float(foul_trouble["MIN"].mean()), 1) if len(foul_trouble) else None,
         "avg_min_normal": round(float(normal["MIN"].mean()), 1) if len(normal) else None,
     }

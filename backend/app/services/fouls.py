@@ -1,12 +1,12 @@
 """Foul profile. Season-wide counts come from game logs; foul *types*
 (offensive / shooting / technical) are parsed from play-by-play for the most
 recent games only, since each game costs one API call (cached permanently)."""
-import pandas as pd
 
 from ..nba import api
 from . import frames
 
-def _classify(sub_type: str, desc: str) -> str:
+
+def _classify(sub_type: str | None, desc: str | None) -> str:
     s = (sub_type or "").lower()
     d = (desc or "").lower()
     if "technical" in s or "technical" in d:

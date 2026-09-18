@@ -8,8 +8,9 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.nba import api  # noqa: E402
-from app.nba.seasons import DEFAULT_SEASONS  # noqa: E402
+from app.nba import api
+from app.nba.seasons import DEFAULT_SEASONS
+
 
 def main() -> None:
     for season in DEFAULT_SEASONS:

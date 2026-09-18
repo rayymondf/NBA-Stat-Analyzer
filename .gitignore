@@ -6,11 +6,31 @@ backend/data/*.sqlite
 backend/data/*.sqlite-journal
 backend/data/models/
 backend/.env
+.env
+.env.*
+!.env.example
+frontend/.env*
+!frontend/.env.example
 backend/evals/results/*.json
+backend/.coverage
+backend/coverage.xml
+backend/.mypy_cache/
+backend/.pytest_cache/
+backend/.hypothesis/
+backend/.ruff_cache/
+backend/.venv/
+backend/mlruns/
+backend/data/processed/
+backend/data/raw/
+backend/data/manifests/
+backend/data/artifacts/
+backend/data/*.sqlite-shm
+backend/data/*.sqlite-wal
 
 # Node
 frontend/node_modules/
 frontend/dist/
+frontend/coverage/
 
 # Misc
 .DS_Store

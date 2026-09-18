@@ -5,14 +5,29 @@ vs season baselines, fourth-quarter execution and scoring runs; score each
 candidate explanation by how unusual/decisive it was; return them ranked with
 evidence for AND against. Data comes from the V3 boxscore/play-by-play.
 """
+from typing import TypedDict
+
 import pandas as pd
 
 from ..nba import api
-from .gamelog import (score_timeline, season_from_game_id,
-                      season_type_from_game_id)
+from .gamelog import score_timeline, season_from_game_id, season_type_from_game_id
+
 
 # Four-factor weights (Dean Oliver) and typical single-game standard deviations
-FACTORS = {
+class FactorConfig(TypedDict):
+    weight: float
+    std: float
+    title: str
+
+
+class Run(TypedDict):
+    team: str
+    points: int
+    start: str | None
+    end: str
+
+
+FACTORS: dict[str, FactorConfig] = {
     "efg": {"weight": 0.40, "std": 0.06, "title": "Shooting efficiency"},
     "tov": {"weight": 0.25, "std": 0.045, "title": "Turnovers"},
     "orb": {"weight": 0.20, "std": 0.10, "title": "Offensive rebounding"},
@@ -55,9 +70,9 @@ def _four_factors(team: dict, opp: dict) -> dict:
     }
 
 
-def _detect_runs(actions: list[dict], home_abbr: str, away_abbr: str) -> list[dict]:
+def _detect_runs(actions: list[dict], home_abbr: str, away_abbr: str) -> list[Run]:
     """Largest unanswered scoring runs from the V3 score progression."""
-    runs = []
+    runs: list[Run] = []
     cur_team, cur_pts, cur_start = None, 0, None
     prev_home, prev_away = 0, 0
     for a in actions:
@@ -201,9 +216,9 @@ def investigate(game_id: str) -> dict:
                     f"{winner['abbr']} {sd_w:+.1f} pts, "
                     f"{loser['abbr']} {sd_l:+.1f} pts"),
         "evidence_for": [
-            {"label": f"{l['name']} ({l['team']})",
-             "value": f"{l['pts']} pts vs {l['season_ppg']} avg ({l['delta']:+.1f})"}
-            for l in star_lines],
+            {"label": f"{line['name']} ({line['team']})",
+             "value": f"{line['pts']} pts vs {line['season_ppg']} avg ({line['delta']:+.1f})"}
+            for line in star_lines],
         "evidence_against": [] if diff > 0 else [
             {"label": "The losing team's stars actually outperformed",
              "value": round(diff, 1)}],

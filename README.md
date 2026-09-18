@@ -1,233 +1,210 @@
 # NBA Stat Analyzer
 
-NBA Stat Analyzer is a local-first web application for exploring NBA player and
-game data. It combines interactive dashboards, a locally trained shot-quality
-model, deterministic game analysis, and an optional Gemini-powered research
-assistant.
+A production-oriented NBA analytics platform with a FastAPI service, strict
+TypeScript/React client, resilient NBA.com integration, and a leakage-resistant
+shot-quality ML pipeline.
 
-The interface and API run on your computer. NBA statistics and headshots are
-fetched from NBA.com when needed, and AI Mode sends questions and selected
-computed results to Google Gemini. There is no subscription required by this
-project, but upstream services have their own availability, quotas, and terms.
+The project is deliberately broader than a dashboard: it demonstrates a
+versioned API with typed parameters and errors, strict frontend domain types,
+deterministic testing, cache/concurrency controls, model governance, data
+lineage, observability, container delivery, and accessible product UX.
 
-## What the application includes
+## Highlights
 
-- **Player search and profiles** for everyone who appeared in the displayed
-  season, plus active players with no appearances. During July through
-  September, the search index also uses the next season's published roster
-  information when available.
-- **Eight player dashboards**: Overview, Shooting, Efficiency, Playtime, Fouls,
-  Game Log, Trends, and Impact.
-- **Interactive shot charts** with individual shots, a frequency heatmap, and
-  zone efficiency compared with league averages.
-- **Player vs the Model**, which compares actual effective field-goal
-  percentage with the result expected from the player's shot locations, shot
-  types, clock, period, and home/away context.
-- **Player vs Player** comparisons using per-game or per-75 statistics and
-  side-by-side shot profiles.
-- **Completed-game investigations** that rank likely reasons for a result using
-  the four factors, bench scoring, star performance, fourth-quarter execution,
-  and scoring runs.
-- **Optional AI Mode** for player questions, claim checks, comparisons, and game
-  analysis. Gemini selects from the app's statistical tools and returns a
-  structured report with evidence, counterevidence, scope, and links.
+- Eight player-analysis views, game investigations, comparisons, league
+  leaders, interactive shot charts, and an optional tool-grounded Gemini mode.
+- Versioned `/api/v1` FastAPI contract with RFC 7807-style errors, input
+  validation, request IDs, freshness headers, rate limits, Prometheus metrics,
+  health probes, retries, stale-if-error, single-flight, and circuit breaking.
+- Resumable team-season ingestion into verified raw Parquet partitions,
+  validated Hive-partitioned datasets, immutable manifests, read-only DuckDB
+  queries, and verified local/S3-compatible artifacts.
+- xFG v3 training code with date-grouped temporal folds, separate tuning and
+  calibration periods, out-of-fold empirical-Bayes priors, clustered bootstrap
+  intervals, calibration/drift/slice reports, and an atomic promotion gate.
+- Strict TypeScript, generated OpenAPI surface checks, TanStack Query async states,
+  accessible search/filter controls, lazy routes/tabs, and deterministic Vitest
+  coverage.
+- Pinned Python/Node dependencies, CI, scheduled retraining, GHCR publishing,
+  multi-stage non-root Docker image, Compose, and a Render Blueprint.
 
-## Technology
+> Current artifact status: the local ignored artifact is xFG **v2** (657,387
+> shots; held-out Brier 0.2244, AUC 0.662). The v3 pipeline is implemented and
+> gated, but a v3 artifact is intentionally not claimed as deployed until a
+> fresh ID-complete ingestion passes the recorded promotion rules.
 
-| Layer | Main tools |
-|---|---|
-| Backend and API | Python, FastAPI, Uvicorn, pandas |
-| NBA data access | `nba_api`, requests, local SQLite cache |
-| Frontend | React, TypeScript, Vite, Tailwind CSS, TanStack Query, Recharts |
-| Shot-quality ML | scikit-learn gradient boosting and joblib |
-| Optional language AI | Google Gen AI SDK with Gemini function calling and structured output |
-| Verification | Python `unittest`, deterministic AI graders, Oxlint, TypeScript, Vite build |
+## Run it
 
-## Quick start on the configured PC
+Prerequisites: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 24, and
+npm. Internet is needed for dependency installation and uncached NBA requests;
+the default test suites are offline.
 
-Double-click [`start-app.bat`](start-app.bat). It starts FastAPI on
-<http://localhost:8000> and opens that address in the default browser. Keep the
-terminal window open while using the app; press `Ctrl+C` or close the window to
-stop it.
-
-If the browser opens before the server is ready, wait a few seconds and refresh.
-
-## Set up a fresh checkout
-
-The one-click launcher is for Windows. The application itself can also be
-started manually on other operating systems.
-
-### Prerequisites
-
-- Python 3.12 is recommended.
-- Node.js must satisfy Vite 8: Node 20.19.x, or Node 22.12 or newer.
-- Internet access is required for initial dependency installation and uncached
-  NBA.com requests.
-- A Gemini API key is optional and is used only by AI Mode.
-
-From PowerShell in the repository root:
+On Windows, the shortest setup is:
 
 ```powershell
-python -m venv backend\venv
-backend\venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-
-Set-Location frontend
-npm install
-npm run build
-Set-Location ..
-```
-
-If PowerShell blocks `npm.ps1`, use `npm.cmd install` and `npm.cmd run build`, or
-run the npm commands in Command Prompt.
-
-The built frontend is written to `frontend/dist/`. That directory and
-`frontend/node_modules/` are generated locally and are intentionally ignored by
-git.
-
-### Enable AI Mode (optional)
-
-Copy the example configuration and replace the placeholder key:
-
-```powershell
-Copy-Item backend\.env.example backend\.env
-```
-
-Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/),
-then set `GEMINI_API_KEY` in `backend/.env`. Do not commit that file. All
-non-AI features work without it.
-
-### Create the shot-quality model (needed on a fresh clone)
-
-The generated `backend/data/models/xfg.joblib` file is ignored by git. If it is
-missing, The Model page reports that the model is unavailable until you run:
-
-```powershell
-backend\venv\Scripts\python.exe backend\scripts\train_models.py
-```
-
-Training downloads and caches team shot charts for the current and previous two
-seasons, evaluates candidate gradient-boosted classifiers, and only saves the
-new model if it passes the comparison gate. No GPU is required. The repository
-does include `backend/data/shots_export.csv`, the downloadable training-data
-export used by the UI.
-
-### Launch
-
-```powershell
+.\setup.ps1
 .\start-app.bat
 ```
 
-## Development workflow
-
-Run the backend and frontend in separate terminals for hot reload.
-
-Terminal 1:
+The equivalent manual setup is:
 
 ```powershell
-backend\venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload --port 8000
+git clone <your-repository-url>
+Set-Location NBA-Stat-Analyzer
+
+Set-Location backend
+uv sync --locked --extra dev
+Set-Location ..\frontend
+npm ci
+npm run build
+Set-Location ..
+
+backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --port 8000
 ```
 
-Terminal 2:
+Open <http://localhost:8000>. API docs are at <http://localhost:8000/docs>.
+The app still works without Gemini; copy `backend/.env.example` to
+`backend/.env` only when you need configuration overrides.
+
+For hot reload, run these in separate terminals:
+
+```powershell
+backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --reload --port 8000
+```
 
 ```powershell
 Set-Location frontend
 npm run dev
 ```
 
-Open <http://localhost:5173>. Vite proxies `/api` to the backend on port 8000.
-FastAPI's generated API explorer is available at <http://localhost:8000/docs>.
-
-Before handing off a change, run:
+### Docker
 
 ```powershell
-backend\venv\Scripts\python.exe -m unittest discover -s backend\tests
-Set-Location frontend
-npm run lint
+docker compose up --build
+```
+
+The image is multi-stage, runs as a non-root user, exposes a health check, and
+does not bake the ignored model, cache, dataset, or secrets into an image.
+Configure verified model bootstrap for production as described in
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+## Data and ML workflow
+
+Run from `backend`:
+
+```powershell
+# Resume three seasons of team-level ingestion and combine the partitions.
+uv run nba-pipeline ingest --recent-seasons 3 --combined data/staging/shots.parquet
+
+# Validate, version, and atomically build the processed dataset.
+uv run nba-pipeline build data/staging/shots.parquet
+
+# Train a candidate. This saves evidence even when the gate fails.
+uv run nba-pipeline train data/processed/shots `
+  --dataset-version <version-from-data/manifests/shots.json>
+
+# Inspect the report, then promote only a passing, checksum-pinned candidate.
+uv run nba-pipeline evaluate data/models/xfg-v3-candidate.joblib
+uv run nba-pipeline promote data/models/xfg-v3-candidate.joblib `
+  --sha256 <candidate-sha256>
+```
+
+The checked-in `shots_export.csv` is a legacy human-readable v2 export. It does
+not contain the complete event identifiers required by the v3 data contract;
+run the resumable ingestion for a v3 candidate.
+
+Useful pipeline commands:
+
+```powershell
+uv run nba-pipeline --help
+uv run nba-pipeline validate <shots.csv-or-parquet>
+uv run nba-pipeline verify <source> <manifest.json>
+uv run nba-pipeline query data/processed/shots "SELECT SEASON, count(*) FROM shots GROUP BY 1"
+uv run nba-pipeline cache-prune-pipeline          # preview obsolete payloads
+uv run nba-pipeline cache-prune-pipeline --apply --vacuum
+```
+
+NBA statistics remain subject to NBA.com availability and terms. See the
+[`data card`](docs/DATA_CARD.md) before redistributing derived data.
+
+## Verify it
+
+```powershell
+Set-Location backend
+uv run ruff check app scripts tests load
+uv run mypy app
+uv run pytest --cov=app --cov-report=term-missing
+uv run python scripts/export_openapi.py
+
+Set-Location ..\frontend
+npm run generate:api
+npm run lint -- --deny-warnings
+npm test
 npm run build
 ```
 
-The deterministic AI evaluation suite is separate from the unit tests:
+Or run the repository skill:
 
 ```powershell
-backend\venv\Scripts\python.exe backend\evals\run_evals.py
+powershell -ExecutionPolicy Bypass -File .agents\skills\nba-release-readiness\scripts\verify.ps1 -Container
 ```
 
-That default command does not call Gemini or consume quota. See
-[`backend/evals/README.md`](backend/evals/README.md) before running live cases.
+The Locust workload is opt-in because it targets a running service:
 
-## Data, caching, and privacy
-
-- Statistics originate from NBA.com's stats endpoints and are accessed through
-  the community-maintained [`nba_api`](https://github.com/swar/nba_api) Python
-  package. No NBA stats API key is required, but NBA.com can throttle or time
-  out requests.
-- Responses involving the season derived as current are cached for 12 hours.
-  Completed-season responses and completed-game box scores/play-by-play are
-  cached without expiration.
-- The cache is `backend/data/cache.sqlite`. It contains both NBA responses and
-  cached successful AI reports. Deleting it is safe but removes all cached data
-  and makes subsequent views download or recompute it again.
-- Coverage runs from the current NBA season to present, and the app rolls
-  into each new season automatically in October — no fixed end date. The
-  footer's date is just a freshness stamp: the most recent completed game
-  found for the current season, not a coverage cutoff. During the offseason,
-  the completed season can remain the data season while next-season roster
-  details appear in search.
-- The Gemini key remains in `backend/.env`. When AI Mode is used, the question,
-  page context, system instructions, and results returned by selected stats
-  tools are sent to Google's API. Regular dashboards do not call Gemini.
-- The server binds to the local machine by default and has no user accounts or
-  authentication. It is designed as a personal local application, not as a
-  hardened public deployment.
-
-## Important interpretation limits
-
-- The shot-quality model estimates make probability from recorded shot context;
-  it does not see defenders, video, player identity, or shooting mechanics.
-- On/off ratings are observational and lineup-dependent, not proof that a player
-  caused a team's rating change.
-- Game investigations are ranked statistical explanations, not a complete film
-  review or causal model.
-- AI Mode is instructed to use tool-returned values and is evaluated for numeric
-  grounding, but generated language can still be wrong. Use its data-scope and
-  tool-trace panels to verify consequential conclusions.
-- Small samples, incomplete NBA endpoints, trades, and unavailable
-  play-by-play can leave some cards empty or make estimates noisy.
-
-## Project structure
-
-```text
-NBA-Stat-Analyzer/
-|-- start-app.bat              Windows one-click launcher
-|-- README.md                  Setup and project overview
-|-- docs/
-|   |-- USER_GUIDE.md          Screen-by-screen usage
-|   |-- HOW_IT_WORKS.md        Architecture, calculations, and API
-|   `-- TROUBLESHOOTING.md     Common failures and recovery
-|-- backend/
-|   |-- app/
-|   |   |-- ai/                Gemini orchestration and statistical tools
-|   |   |-- nba/               NBA endpoint wrappers, seasons, and cache
-|   |   |-- routers/           FastAPI routes
-|   |   `-- services/          Statistical and ML business logic
-|   |-- data/                  Generated cache/model and exported shot CSV
-|   |-- evals/                 Deterministic and live AI evaluations
-|   |-- scripts/               Cache warming, model training, CSV export
-|   `-- tests/                 Python unit tests
-`-- frontend/
-    |-- src/components/        Shared UI, charts, profile and model sections
-    |-- src/pages/             Route-level React components
-    `-- dist/                  Production build served by FastAPI (generated)
+```powershell
+Set-Location backend
+uv sync --locked --extra load
+uv run locust -f load/locustfile.py --host http://localhost:8000
 ```
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Browser[React client] -->|typed /api/v1| API[FastAPI]
+  API --> Services[analytics services]
+  Services --> Client[NBA client controls]
+  Client --> Cache[(SQLite + memory LRU)]
+  Client --> NBA[NBA.com]
+  Services --> Model[xFG artifact]
+  Pipeline[resumable data + ML pipeline] --> Parquet[(versioned Parquet)]
+  Parquet --> Pipeline
+  Pipeline --> Gate{quality gate}
+  Gate -->|pass| Store[immutable artifact store]
+  Store -->|SHA-256 verified bootstrap| Model
+  API --> Metrics[health + Prometheus]
+```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for request, data, model, and
+deployment boundaries.
+
+## Project agents and skills
+
+The repo contains local Codex configuration so repeated engineering work uses
+the same standards:
+
+- Agents: code mapping, API review, ML evaluation, performance profiling,
+  frontend quality, security review, release verification, and portfolio review
+  in `.codex/agents/`.
+- Skills: pipeline changes, xFG evaluation, cross-layer feature delivery,
+  release readiness, performance budgets, security audits, UI quality, and
+  portfolio evidence in `.agents/skills/`.
+- Instructions: root and directory-specific `AGENTS.md` files.
+
+Example requests: “Use `ml_evaluator` to review this candidate report,” “run
+`$nba-security-audit`,” or “use `$nba-feature-delivery` to add a filter across
+the API and UI.” These helpers review and automate work; the normal release gate
+remains authoritative.
 
 ## Documentation
 
-- [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md): how to use every screen and
-  interpret the main outputs.
-- [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md): data flow, formulas, model,
-  game investigation, AI grounding, API routes, and code organization.
-- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md): startup, data, model,
-  build, cache, and AI problems.
-- [`frontend/README.md`](frontend/README.md): frontend architecture and scripts.
-- [`backend/evals/README.md`](backend/evals/README.md): AI evaluation cases,
-  graders, CLI options, and quota-safe workflow.
+- [`Architecture`](docs/ARCHITECTURE.md)
+- [`Model card`](docs/MODEL_CARD.md)
+- [`Data card`](docs/DATA_CARD.md)
+- [`Deployment and operations`](docs/DEPLOYMENT.md)
+- [`Threat model`](docs/THREAT_MODEL.md)
+- [`Performance evidence`](docs/PERFORMANCE.md)
+- [`Portfolio and interview guide`](docs/PORTFOLIO.md)
+- [`User guide`](docs/USER_GUIDE.md) and [`troubleshooting`](docs/TROUBLESHOOTING.md)
+
+MIT licensed. This project is not affiliated with or endorsed by the NBA.

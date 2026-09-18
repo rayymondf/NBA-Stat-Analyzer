@@ -12,17 +12,18 @@ from nba_api.stats.endpoints import (
     leaguedashteamstats,
     leaguegamefinder,
     playbyplayv3,
-    playerprofilev2,
     playerdashboardbyclutch,
     playerdashboardbygamesplits,
     playerdashboardbygeneralsplits,
     playergamelogs,
     playerindex,
+    playerprofilev2,
     shotchartdetail,
     teamplayeronoffdetails,
 )
 
 from .client import fetch
+from .seasons import current_season
 
 REGULAR = "Regular Season"
 PLAYOFFS = "Playoffs"
@@ -100,7 +101,8 @@ def shot_chart(player_id: int, season: str, season_type: str = REGULAR,
 
 
 def team_shot_chart(team_id: int, season: str,
-                    season_type: str = REGULAR) -> list[dict]:
+                    season_type: str = REGULAR, *,
+                    persist_cache: bool = True) -> list[dict]:
     """Every shot by one team in a season (player_id=0 = all players).
     Used to build the xFG training set — 30 cached calls per season."""
     data = fetch(
@@ -110,6 +112,7 @@ def team_shot_chart(team_id: int, season: str,
         season_nullable=season,
         season_type_all_star=season_type,
         context_measure_simple="FGA",
+        persist_cache=persist_cache,
     )
     return data.get("Shot_Chart_Detail", [])
 
@@ -206,14 +209,26 @@ def boxscore_traditional(game_id: str) -> dict:
     """V3 boxscore: {homeTeam: {...players, statistics, starters, bench},
     awayTeam: {...}} — V2 returns empty rows for recent seasons."""
     data = fetch(boxscoretraditionalv3.BoxScoreTraditionalV3,
-                 game_id=game_id, ttl=None, raw=True)
+                 game_id=game_id, ttl=_game_detail_ttl(game_id), raw=True)
     return data.get("boxScoreTraditional", {})
 
 
 def play_by_play(game_id: str) -> list[dict]:
     """V3 play-by-play action list (actionType/subType/scoreHome/scoreAway)."""
-    data = fetch(playbyplayv3.PlayByPlayV3, game_id=game_id, ttl=None, raw=True)
+    data = fetch(
+        playbyplayv3.PlayByPlayV3,
+        game_id=game_id,
+        ttl=_game_detail_ttl(game_id),
+        raw=True,
+    )
     return data.get("game", {}).get("actions", [])
+
+
+def _game_detail_ttl(game_id: str) -> float | None:
+    """Refresh current-season live/final game detail; historical games are immutable."""
+    season_start = current_season()[:4]
+    game_season = f"20{game_id[3:5]}" if len(game_id) == 10 and game_id.isdigit() else ""
+    return 5 * 60 if game_season == season_start else None
 
 
 def find_team_games(season: str, season_type: str = REGULAR) -> list[dict]:

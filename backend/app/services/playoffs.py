@@ -5,7 +5,6 @@ game (facing elimination; every playoff round has been best-of-7 since 2003).
 A closeout game = the opponent has 3 losses (a chance to end the series).
 Both are derived purely from the ordered playoff game logs.
 """
-import pandas as pd
 
 from ..nba.seasons import current_season, previous_season
 from . import frames

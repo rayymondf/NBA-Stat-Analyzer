@@ -84,7 +84,7 @@ def apply_filters(df: pd.DataFrame, f: LogFilters) -> pd.DataFrame:
         out = out[out["GAME_DATE"] >= pd.Timestamp(f.date_from)]
     if f.date_to:
         out = out[out["GAME_DATE"] <= pd.Timestamp(f.date_to)]
-    if f.last_n:
+    if f.last_n and f.last_n > 0:
         out = out.tail(f.last_n)
     return out
 
@@ -155,12 +155,21 @@ def aggregate(df: pd.DataFrame) -> dict:
 
     # Possession-weighted ratings from the advanced logs
     if "OFF_RATING" in df.columns and poss:
-        w = df["POSS"].fillna(0)
-        if w.sum() > 0:
-            for col in ("OFF_RATING", "DEF_RATING", "NET_RATING", "PACE"):
-                if col in df.columns:
-                    vals = df[col].fillna(0)
-                    result["shooting"][col] = round(float(np.average(vals, weights=w)), 1)
+        if "POSS" in df.columns:
+            rating_weights = df["POSS"]
+        else:
+            rating_weights = df["FGA"] + 0.44 * df["FTA"] + df["TOV"]
+        for col in ("OFF_RATING", "DEF_RATING", "NET_RATING", "PACE"):
+            if col not in df.columns:
+                continue
+            # Missing advanced rows are unknown, not zero-rating games. Each
+            # metric gets its own complete-case weight mask.
+            valid = df[col].notna() & rating_weights.notna() & (rating_weights > 0)
+            if valid.any():
+                shooting[col] = round(float(np.average(
+                    df.loc[valid, col].astype(float),
+                    weights=rating_weights.loc[valid].astype(float),
+                )), 1)
     return result
 
 
@@ -172,6 +181,8 @@ def game_rows(df: pd.DataFrame) -> list[dict]:
     for _, r in df.iterrows():
         fga, fta = r.get("FGA", 0), r.get("FTA", 0)
         tsa = fga + 0.44 * fta
+        plus_minus = r.get("PLUS_MINUS")
+        usage = r.get("USG_PCT")
         rows.append({
             "game_id": r["GAME_ID"],
             "date": r["GAME_DATE"].strftime("%Y-%m-%d"),
@@ -194,8 +205,8 @@ def game_rows(df: pd.DataFrame) -> list[dict]:
             "fg3a": int(r.get("FG3A", 0)),
             "ftm": int(r.get("FTM", 0)),
             "fta": int(fta),
-            "plus_minus": None if pd.isna(r.get("PLUS_MINUS")) else int(r.get("PLUS_MINUS")),
+            "plus_minus": None if pd.isna(plus_minus) else int(plus_minus),
             "ts_pct": round(float(r.get("PTS", 0)) / (2 * tsa), 3) if tsa else None,
-            "usg_pct": None if pd.isna(r.get("USG_PCT")) else float(r.get("USG_PCT")),
+            "usg_pct": None if pd.isna(usage) else float(usage),
         })
     return rows

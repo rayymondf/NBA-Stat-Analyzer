@@ -1,24 +1,25 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from ..nba.seasons import current_season
+from ..routing import GameId, Season, SeasonType, TeamAbbreviation
+from ..schemas import JsonObject, JsonObjectList
 from ..services import game_investigation
 
-router = APIRouter(prefix="/api/games", tags=["games"])
+router = APIRouter(prefix="/games", tags=["games"])
 
 
-@router.get("")
-def list_games(season: str | None = None,
-               season_type: str = "Regular Season",
-               team: str | None = None, limit: int = 100):
+@router.get("", response_model=JsonObjectList)
+def list_games(season: Season | None = None,
+               season_type: SeasonType = SeasonType.REGULAR,
+               team: TeamAbbreviation | None = None,
+               limit: int = Query(default=100, ge=1, le=250)):
     return game_investigation.list_games(season or current_season(),
-                                         season_type, team, limit)
+                                         str(season_type), team, limit)
 
 
-@router.get("/{game_id}/investigate")
-def investigate(game_id: str):
+@router.get("/{game_id}/investigate", response_model=JsonObject)
+def investigate(game_id: GameId):
     try:
         return game_investigation.investigate(game_id)
     except ValueError as err:
-        raise HTTPException(status_code=404, detail=str(err))
-    except RuntimeError as err:
-        raise HTTPException(status_code=502, detail=str(err))
+        raise HTTPException(status_code=404, detail=str(err)) from err

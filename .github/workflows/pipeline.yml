@@ -1,0 +1,109 @@
+name: Data and model pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * 1-4,10-12 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nba-data-model-pipeline
+  cancel-in-progress: false
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      ARTIFACT_BASE_URL: ${{ secrets.ARTIFACT_BASE_URL }}
+      ARTIFACT_EXPECTED_SHA256: ${{ secrets.ARTIFACT_EXPECTED_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.22"
+          enable-cache: true
+      - uses: actions/cache@v4
+        with:
+          path: backend/data/raw/shots
+          key: raw-shots-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            raw-shots-${{ runner.os }}-
+      - run: uv sync --locked --extra ml --extra pipeline
+      - name: Resume raw ingestion
+        run: >-
+          uv run nba-pipeline ingest --recent-seasons 3
+          --raw-dir data/raw/shots --combined data/staging/shots.parquet
+      - name: Validate and build versioned dataset
+        run: >-
+          uv run nba-pipeline build data/staging/shots.parquet
+          --output data/processed/shots --manifest data/manifests/shots.json
+      - name: Pull eligible incumbent when configured
+        run: |
+          if [ -n "$ARTIFACT_BASE_URL" ] && [ -n "$ARTIFACT_EXPECTED_SHA256" ]; then
+            INCUMBENT_PATH=$(uv run nba-pipeline artifact-pull "$ARTIFACT_BASE_URL" \
+              --sha256 "$ARTIFACT_EXPECTED_SHA256" --output data/incumbent | tail -n 1)
+            echo "INCUMBENT_PATH=$INCUMBENT_PATH" >> "$GITHUB_ENV"
+          fi
+      - name: Train candidate and produce evaluation evidence
+        run: |
+          DATASET_VERSION=$(uv run python -c "import json; print(json.load(open('data/manifests/shots.json'))['dataset_version'])")
+          if [ -n "$INCUMBENT_PATH" ]; then
+            uv run nba-pipeline train data/processed/shots \
+              --dataset-version "$DATASET_VERSION" --incumbent "$INCUMBENT_PATH" \
+              --incumbent-sha256 "$ARTIFACT_EXPECTED_SHA256" \
+              --output data/models/xfg-v3-candidate.joblib \
+              --report data/models/xfg-v3-evaluation.json
+          else
+            uv run nba-pipeline train data/processed/shots \
+              --dataset-version "$DATASET_VERSION" \
+              --output data/models/xfg-v3-candidate.joblib \
+              --report data/models/xfg-v3-evaluation.json
+          fi
+      - name: Check promotion gate
+        id: gate
+        continue-on-error: true
+        run: >-
+          uv run python -c
+          "import joblib,sys; b=joblib.load('data/models/xfg-v3-candidate.joblib');
+          sys.exit(0 if b['meta']['promotion']['passed'] else 1)"
+      - name: Stage and optionally publish passing release
+        if: steps.gate.outcome == 'success'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+        run: |
+          DATASET_VERSION=$(uv run python -c "import json; print(json.load(open('data/manifests/shots.json'))['dataset_version'])")
+          if [ -n "$R2_BUCKET" ] && [ -n "$R2_ENDPOINT_URL" ]; then
+            uv run nba-pipeline artifact-publish data/models/xfg-v3-candidate.joblib \
+              --destination data/artifacts --version "v3-${GITHUB_RUN_ID}" \
+              --dataset-version "$DATASET_VERSION" --bucket "$R2_BUCKET" \
+              --endpoint-url "$R2_ENDPOINT_URL"
+          elif [ -n "$R2_BUCKET" ]; then
+            uv run nba-pipeline artifact-publish data/models/xfg-v3-candidate.joblib \
+              --destination data/artifacts --version "v3-${GITHUB_RUN_ID}" \
+              --dataset-version "$DATASET_VERSION" --bucket "$R2_BUCKET"
+          else
+            uv run nba-pipeline artifact-publish data/models/xfg-v3-candidate.joblib \
+              --destination data/artifacts --version "v3-${GITHUB_RUN_ID}" \
+              --dataset-version "$DATASET_VERSION"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: xfg-pipeline-${{ github.run_id }}
+          path: |
+            backend/data/manifests/shots.json
+            backend/data/models/xfg-v3-evaluation.json
+            backend/data/models/xfg-v3-candidate.joblib
+          retention-days: 14

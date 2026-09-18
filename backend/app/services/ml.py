@@ -9,19 +9,24 @@ selection.
 
 The model uses shot location and context data only, never video or images.
 """
-import os
+import logging
+import math
 import threading
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import requests
 
+from ..config import get_settings
 from ..nba import api
 from ..nba.seasons import current_season
+from ..pipeline.artifacts import ArtifactVerificationError, download_verified
+from ..pipeline.manifest import sha256_file
 
-MODEL_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", "..", "data", "models", "xfg.joblib"))
+MODEL_PATH = str(get_settings().data_dir / "models" / "xfg.joblib")
 
-MODEL_VERSION = 2
+MODEL_VERSION = 3
 
 ZONES = ["Restricted Area", "In The Paint (Non-RA)", "Mid-Range",
          "Left Corner 3", "Right Corner 3", "Above the Break 3", "Backcourt"]
@@ -62,6 +67,9 @@ def _team_abbr() -> dict[int, str]:
 
 _model_lock = threading.Lock()
 _model_bundle: dict | None = None
+_model_load_attempted = False
+_model_load_error: str | None = None
+log = logging.getLogger(__name__)
 
 
 def action_group(action: str) -> str:
@@ -81,66 +89,210 @@ def action_group(action: str) -> str:
 
 
 def build_features(shots: pd.DataFrame,
-                   columns: list[str] | None = None) -> pd.DataFrame:
+                   columns: list[str] | None = None,
+                   *, strict: bool = False) -> pd.DataFrame:
     """Numeric feature matrix from raw Shot_Chart_Detail rows.
 
     Shared by training and inference so both always agree. `columns` selects
     which feature set to return; a saved model bundle carries its own list so
     inference always matches what that model was trained on.
     """
-    out = pd.DataFrame(index=shots.index)
-    out["distance"] = shots["SHOT_DISTANCE"].astype(float)
-    out["abs_x"] = shots["LOC_X"].abs().astype(float)
-    out["loc_y"] = shots["LOC_Y"].astype(float)
+    if strict:
+        required = {
+            "SHOT_DISTANCE", "LOC_X", "LOC_Y", "PERIOD", "MINUTES_REMAINING",
+            "SECONDS_REMAINING", "SHOT_TYPE", "SHOT_ZONE_BASIC", "SHOT_ZONE_AREA",
+            "ACTION_TYPE", "TEAM_ID", "HTM",
+        }
+        missing = sorted(required.difference(shots.columns))
+        if missing:
+            raise ValueError(f"v3 features require columns: {', '.join(missing)}")
+        if shots[list(required)].isna().any().any():
+            raise ValueError("v3 feature columns must not contain null values")
+    distance = pd.to_numeric(shots["SHOT_DISTANCE"], errors="coerce").to_numpy(dtype=np.float32)
+    loc_x = pd.to_numeric(shots["LOC_X"], errors="coerce").to_numpy(dtype=np.float32)
+    loc_y = pd.to_numeric(shots["LOC_Y"], errors="coerce").to_numpy(dtype=np.float32)
+    period = np.minimum(
+        pd.to_numeric(shots["PERIOD"], errors="coerce").to_numpy(dtype=np.float32), 5
+    )
+    data: dict[str, np.ndarray] = {
+        "distance": distance,
+        "abs_x": np.abs(loc_x),
+        "loc_y": loc_y,
+        "angle": np.degrees(np.arctan2(loc_x, loc_y)).astype(np.float32),
+        "period": period,
+    }
     # Angle from the hoop in degrees: 0 = straight on, +/-90 = the baselines.
-    out["angle"] = np.degrees(np.arctan2(
-        shots["LOC_X"].astype(float), shots["LOC_Y"].astype(float)))
-    out["period"] = shots["PERIOD"].clip(upper=5).astype(float)
     # Seconds left in the period: separates normal shots from end-of-quarter
     # heaves, the single biggest calibration fix in v2.
     if "MINUTES_REMAINING" in shots.columns and "SECONDS_REMAINING" in shots.columns:
-        secs = (shots["MINUTES_REMAINING"].astype(float) * 60
-                + shots["SECONDS_REMAINING"].astype(float))
-        out["seconds_left_period"] = secs.clip(0, 720)
+        minutes = pd.to_numeric(shots["MINUTES_REMAINING"], errors="coerce").to_numpy(
+            dtype=np.float32
+        )
+        seconds = pd.to_numeric(shots["SECONDS_REMAINING"], errors="coerce").to_numpy(
+            dtype=np.float32
+        )
+        data["seconds_left_period"] = np.clip(minutes * 60 + seconds, 0, 720)
     else:
-        out["seconds_left_period"] = 360.0
-    out["is_three"] = shots["SHOT_TYPE"].astype(str).str.contains("3PT").astype(float)
+        data["seconds_left_period"] = np.full(len(shots), 360, dtype=np.float32)
+    data["is_three"] = shots["SHOT_TYPE"].astype(str).str.contains("3PT").to_numpy(
+        dtype=np.float32
+    )
     if "HTM" in shots.columns and "TEAM_ID" in shots.columns:
-        abbr = shots["TEAM_ID"].map(_team_abbr())
-        out["is_home"] = (abbr == shots["HTM"]).astype(float)
+        team_ids = pd.to_numeric(shots["TEAM_ID"], errors="coerce").astype("Int64")
+        abbr = team_ids.map(_team_abbr())
+        if strict and abbr.isna().any():
+            raise ValueError("TEAM_ID could not be mapped to an NBA team")
+        data["is_home"] = (abbr == shots["HTM"]).to_numpy(dtype=np.float32)
     else:
-        out["is_home"] = 0.0
+        data["is_home"] = np.zeros(len(shots), dtype=np.float32)
     for z in ZONES:
-        out[f"zone_{z}"] = (shots["SHOT_ZONE_BASIC"] == z).astype(float)
+        data[f"zone_{z}"] = (shots["SHOT_ZONE_BASIC"] == z).to_numpy(dtype=np.float32)
     if "SHOT_ZONE_AREA" in shots.columns:
         for a in ZONE_AREAS:
-            out[f"area_{a}"] = (shots["SHOT_ZONE_AREA"] == a).astype(float)
+            data[f"area_{a}"] = (shots["SHOT_ZONE_AREA"] == a).to_numpy(dtype=np.float32)
     else:
         for a in ZONE_AREAS:
-            out[f"area_{a}"] = 0.0
+            data[f"area_{a}"] = np.zeros(len(shots), dtype=np.float32)
     groups = shots["ACTION_TYPE"].map(action_group)
     for a in ACTION_GROUPS:
-        out[f"action_{a}"] = (groups == a).astype(float)
+        data[f"action_{a}"] = (groups == a).to_numpy(dtype=np.float32)
+    out = pd.DataFrame(data, index=shots.index, dtype=np.float32)
     return out[columns or FEATURE_COLUMNS]
 
 
 def load_model() -> dict | None:
     """Lazy-load the trained bundle {model, meta, delta_distribution}."""
-    global _model_bundle
+    global _model_bundle, _model_load_attempted, _model_load_error
     if _model_bundle is not None:
         return _model_bundle
+    if _model_load_attempted:
+        return None
     with _model_lock:
-        if _model_bundle is None and os.path.isfile(MODEL_PATH):
+        if _model_bundle is not None:
+            return _model_bundle
+        if _model_load_attempted:
+            return None
+        _model_load_attempted = True
+        path = Path(MODEL_PATH)
+        settings = get_settings()
+        if not path.is_file() and settings.artifact_base_url:
+            if not settings.artifact_expected_sha256:
+                _model_load_error = "artifact_pin_required"
+                log.error("ARTIFACT_BASE_URL requires a pinned SHA-256")
+                return None
+            try:
+                downloaded = download_verified(
+                    settings.artifact_base_url,
+                    path.parent,
+                    expected_sha256=settings.artifact_expected_sha256,
+                )
+                if downloaded != path:
+                    downloaded.replace(path)
+            except (OSError, ValueError, ArtifactVerificationError, requests.RequestException) as exc:
+                _model_load_error = "artifact_bootstrap_failed"
+                log.error(
+                    "Unable to bootstrap verified xFG artifact (%s)",
+                    type(exc).__name__,
+                )
+                return None
+        if path.is_file():
             import joblib
-            _model_bundle = joblib.load(MODEL_PATH)
+
+            if (
+                settings.environment.lower() == "production"
+                and not settings.artifact_expected_sha256
+            ):
+                _model_load_error = "artifact_pin_required"
+                log.error("Production model load requires ARTIFACT_EXPECTED_SHA256")
+                return None
+            if (
+                settings.artifact_expected_sha256
+                and sha256_file(path) != settings.artifact_expected_sha256
+            ):
+                _model_load_error = "artifact_checksum_mismatch"
+                log.error("Local artifact checksum does not match the configured pin")
+                return None
+            try:
+                candidate = joblib.load(path)
+            except Exception as exc:
+                _model_load_error = "artifact_deserialization_failed"
+                log.error("Unable to load xFG artifact (%s)", type(exc).__name__)
+                return None
+            if (
+                not isinstance(candidate, dict)
+                or not callable(getattr(candidate.get("model"), "predict_proba", None))
+                or not isinstance(candidate.get("feature_columns"), list)
+                or not isinstance(candidate.get("meta"), dict)
+            ):
+                _model_load_error = "artifact_contract_invalid"
+                log.error("Artifact does not match the xFG bundle contract")
+                return None
+            _model_bundle = candidate
+            _model_load_error = None
+        elif not path.is_file():
+            _model_load_error = "artifact_not_found"
     return _model_bundle
+
+
+def reload_model() -> dict | None:
+    """Clear the in-process model cache after an atomic artifact promotion."""
+    global _model_bundle, _model_load_attempted, _model_load_error
+    with _model_lock:
+        _model_bundle = None
+        _model_load_attempted = False
+        _model_load_error = None
+    return load_model()
+
+
+def model_status() -> dict[str, object]:
+    bundle = _model_bundle
+    return {
+        "available": bundle is not None,
+        "attempted": _model_load_attempted,
+        "error": _model_load_error,
+        "version": bundle.get("meta", {}).get("model_version") if bundle else None,
+        "dataset_version": bundle.get("meta", {}).get("dataset_version") if bundle else None,
+    }
+
+
+def warm_model(bundle: dict | None = None) -> bool:
+    """Pay native-library/model initialization cost before the first visitor."""
+    bundle = bundle or _model_bundle
+    if not bundle:
+        return False
+    columns = bundle.get("feature_columns") or FEATURE_COLUMNS
+    sample = pd.DataFrame(np.zeros((1, len(columns)), dtype=np.float32), columns=columns)
+    bundle["model"].predict_proba(sample)
+    return True
 
 
 def _delta_percentile(delta: float, distribution: list[float]) -> int | None:
     if not distribution:
         return None
     arr = np.asarray(distribution)
-    return int(round((arr < delta).mean() * 100))
+    return round((arr < delta).mean() * 100)
+
+
+def _shrunken_delta(
+    raw_delta: float,
+    probabilities: np.ndarray,
+    weights: np.ndarray,
+    prior_variance: float,
+    prior_mean: float = 0.0,
+) -> tuple[float, tuple[float, float]]:
+    """Empirical-Bayes estimate and interval for a player's weighted FG delta."""
+    n = len(probabilities)
+    measurement_variance = float(
+        np.sum(weights**2 * probabilities * (1 - probabilities)) / n**2
+    )
+    measurement_variance = max(measurement_variance, 1e-9)
+    prior_variance = max(prior_variance, 1e-9)
+    posterior_variance = 1 / (1 / prior_variance + 1 / measurement_variance)
+    posterior = posterior_variance * (
+        prior_mean / prior_variance + raw_delta / measurement_variance
+    )
+    margin = 1.96 * math.sqrt(posterior_variance)
+    return float(posterior), (float(posterior - margin), float(posterior + margin))
 
 
 def shot_quality(player_id: int, season: str | None = None,
@@ -160,7 +312,12 @@ def shot_quality(player_id: int, season: str | None = None,
 
     model = bundle["model"]
     cols = bundle.get("feature_columns") or FEATURE_COLUMNS_V1
-    x = build_features(shots, cols)
+    meta = bundle.get("meta", {})
+    model_version = int(meta.get("model_version", 1))
+    try:
+        x = build_features(shots, cols, strict=model_version >= 3)
+    except ValueError as exc:
+        return {"available": False, "reason": f"Shot context is incomplete: {exc}"}
     xfg = model.predict_proba(x)[:, 1]
 
     made = shots["SHOT_MADE_FLAG"].astype(float).to_numpy()
@@ -170,7 +327,7 @@ def shot_quality(player_id: int, season: str | None = None,
     n = len(shots)
     expected_efg = float((xfg * weight).sum() / n)
     actual_efg = float((made * weight).sum() / n)
-    delta = actual_efg - expected_efg
+    raw_delta = actual_efg - expected_efg
 
     zones = []
     for z in ZONES:
@@ -186,7 +343,16 @@ def shot_quality(player_id: int, season: str | None = None,
             "delta": round(float(made[mask].mean() - xfg[mask].mean()), 3),
         })
 
-    meta = bundle.get("meta", {})
+    if model_version >= 3:
+        delta, confidence_interval = _shrunken_delta(
+            raw_delta,
+            xfg,
+            weight,
+            float(meta.get("prior_variance", 0.0025)),
+            float(meta.get("prior_mean", 0.0)),
+        )
+    else:
+        delta, confidence_interval = raw_delta, None
     return {
         "available": True,
         "season": season,
@@ -195,6 +361,12 @@ def shot_quality(player_id: int, season: str | None = None,
         "expected_efg": round(expected_efg, 3),
         "actual_efg": round(actual_efg, 3),
         "delta": round(delta, 3),
+        "raw_delta": round(raw_delta, 3),
+        "shrunk_delta": round(delta, 3),
+        "confidence_interval_95": (
+            [round(confidence_interval[0], 3), round(confidence_interval[1], 3)]
+            if confidence_interval else None
+        ),
         "delta_per_100_shots": round(delta * 2 * 100, 1),  # extra points per 100 FGA
         "percentile": _delta_percentile(delta, bundle.get("delta_distribution", [])),
         "zones": zones,
@@ -204,13 +376,20 @@ def shot_quality(player_id: int, season: str | None = None,
             "brier": meta.get("brier"),
             "auc": meta.get("auc"),
             "trained_at": meta.get("trained_at"),
-            "model_version": meta.get("model_version", 1),
+            "model_version": model_version,
+            "dataset_version": meta.get("dataset_version"),
         },
         "explanation": (
             "Expected eFG% (xFG) is what an average NBA player would shoot "
             "from this player's exact shot locations and types, estimated by "
             "a model trained on real NBA shots. A positive delta means the "
             "player makes more than those shots usually yield: shot-making "
-            "skill beyond shot selection. This is a model estimate built from "
-            "shot locations and types only, never video."),
+            "a residual versus the league shot-context benchmark. It is not a "
+            "causal or pure-talent measure: contest, defender, play context and "
+            "video are not available to this model."),
+        "uncertainty_note": (
+            "The displayed delta is shrunk toward league average for small samples. "
+            "Its 95% interval captures shot-result sampling uncertainty, not every source "
+            "of model or tracking-data uncertainty."
+        ),
     }

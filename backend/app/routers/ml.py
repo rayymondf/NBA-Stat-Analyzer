@@ -3,23 +3,25 @@ frontend's "The Model" page and a download of the training dataset CSV."""
 import os
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
+from ..config import get_settings
+from ..schemas import JsonObject
 from ..services import ml
 
-router = APIRouter(prefix="/api/ml", tags=["ml"])
+router = APIRouter(prefix="/ml", tags=["ml"])
 
-CSV_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), "..", "..", "data", "shots_export.csv"))
+CSV_PATH = str(get_settings().data_dir / "shots_export.csv")
 
 
-@router.get("/model-info")
+@router.get("/model-info", response_model=JsonObject)
 def model_info():
+    settings = get_settings()
     bundle = ml.load_model()
     if bundle is None:
         return {"available": False,
                 "reason": ("Model not trained yet. Run "
-                           "backend/scripts/train_models.py once.")}
+                           "nba-pipeline train --help.")}
     meta = bundle.get("meta", {})
     csv_exists = os.path.isfile(CSV_PATH)
     return {
@@ -33,6 +35,9 @@ def model_info():
             "brier_naive": meta.get("brier_naive"),
             "auc": meta.get("auc"),
             "n_test": meta.get("n_test"),
+            "log_loss": meta.get("log_loss"),
+            "average_precision": meta.get("average_precision"),
+            "ece": meta.get("ece"),
         },
         "baseline": meta.get("baseline"),
         "calibration_by_distance": meta.get("calibration_by_distance", []),
@@ -40,16 +45,39 @@ def model_info():
         "delta_distribution": bundle.get("delta_distribution", []),
         "feature_count": len(bundle.get("feature_columns")
                              or ml.FEATURE_COLUMNS),
+        "selected_model": bundle.get("evaluation", {}).get("winner", "legacy gradient boosting"),
+        "feature_importance": bundle.get("evaluation", {}).get("feature_importance", []),
+        "drift": bundle.get("evaluation", {}).get("drift", []),
+        "confidence_intervals_95": bundle.get("evaluation", {}).get(
+            "confidence_intervals_95", {}
+        ),
+        "evaluation": bundle.get("evaluation", {}),
         "dataset": {
-            "available": csv_exists,
+            "available": csv_exists or bool(settings.dataset_public_url),
             "size_bytes": os.path.getsize(CSV_PATH) if csv_exists else 0,
-            "url": "/api/ml/dataset.csv",
+            "url": "/api/v1/ml/dataset.csv",
+            "usage_note": (
+                "Derived from NBA.com statistics. Review NBA.com terms before "
+                "redistributing or using the dataset commercially."
+            ),
         },
     }
 
 
-@router.get("/dataset.csv")
+@router.get(
+    "/dataset.csv",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "content": {"text/csv": {"schema": {"type": "string", "format": "binary"}}},
+            "description": "Versioned shot-training data export",
+        }
+    },
+)
 def dataset_csv():
+    public_url = get_settings().dataset_public_url
+    if public_url:
+        return RedirectResponse(public_url, status_code=307)
     if not os.path.isfile(CSV_PATH):
         raise HTTPException(
             status_code=404,

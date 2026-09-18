@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: nba-stat-analyzer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: /app/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health/ready
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: EXPOSE_API_DOCS
+        value: "true"
+      - key: REQUIRE_MODEL
+        value: "false"
+      - key: TRUSTED_HOSTS
+        value: "*.onrender.com,localhost,127.0.0.1"
+      - key: CACHE_MAX_MB
+        value: "256"
+      - key: CACHE_MEMORY_MAX_MB
+        value: "48"
+      - key: API_RATE_LIMIT_PER_MINUTE
+        value: "180"
+      - key: EXPENSIVE_RATE_LIMIT_PER_MINUTE
+        value: "20"
+      - key: AI_RATE_LIMIT_PER_MINUTE
+        value: "4"

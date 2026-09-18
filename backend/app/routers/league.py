@@ -1,9 +1,13 @@
-from fastapi import APIRouter
+from typing import Literal
+
+from fastapi import APIRouter, Query
 
 from ..nba.seasons import current_season, previous_season
+from ..routing import PlayerId, Season, SeasonType
+from ..schemas import JsonObject, JsonObjectList
 from ..services import compare, game_investigation, league
 
-router = APIRouter(prefix="/api", tags=["league"])
+router = APIRouter(tags=["league"])
 
 
 def _latest_game_date(season: str) -> str | None:
@@ -18,7 +22,7 @@ def _latest_game_date(season: str) -> str | None:
     return None
 
 
-@router.get("/meta")
+@router.get("/meta", response_model=JsonObject)
 def meta():
     # Everything derived from today's date at request time, so the app rolls
     # into new NBA seasons automatically (October) without code changes.
@@ -47,43 +51,59 @@ def meta():
     }
 
 
-@router.get("/compare")
-def compare_players(a: int, b: int, season: str | None = None,
-                    season_type: str = "Regular Season"):
-    return compare.compare(a, b, season or current_season(), season_type)
+@router.get("/compare", response_model=JsonObject)
+def compare_players(a: int = Query(gt=0), b: int = Query(gt=0),
+                    season: Season | None = None,
+                    season_type: SeasonType = SeasonType.REGULAR):
+    return compare.compare(a, b, season or current_season(), str(season_type))
 
 
-@router.get("/league/leaders")
-def leaders(season: str | None = None, stat: str = "PTS",
-            per_mode: str = "PerGame", measure: str = "Base",
-            season_type: str = "Regular Season", limit: int = 15):
+@router.get("/league/leaders", response_model=JsonObjectList)
+def leaders(season: Season | None = None,
+            stat: Literal[
+                "PTS", "REB", "AST", "STL", "BLK", "TOV", "FGM", "FGA",
+                "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT",
+                "OREB", "DREB", "PLUS_MINUS", "MIN", "TS_PCT", "USG_PCT",
+                "OFF_RATING", "DEF_RATING", "NET_RATING", "PACE",
+            ] = "PTS",
+            per_mode: Literal["Totals", "PerGame", "Per36", "Per100Possessions"] = "PerGame",
+            measure: Literal["Base", "Advanced"] = "Base",
+            season_type: SeasonType = SeasonType.REGULAR,
+            limit: int = Query(default=15, ge=1, le=100)):
     return league.leaders(season or current_season(), stat, per_mode, measure,
-                          season_type, limit)
+                          str(season_type), limit)
 
 
-@router.get("/league/improvers")
-def improvers(season: str | None = None, metric: str = "TS_PCT",
-              season_type: str = "Regular Season", limit: int = 15):
-    return league.improvers(season or current_season(), metric, season_type,
+@router.get("/league/improvers", response_model=JsonObjectList)
+def improvers(season: Season | None = None,
+              metric: Literal[
+                  "TS_PCT", "USG_PCT", "AST_PCT", "REB_PCT", "OFF_RATING",
+                  "DEF_RATING", "NET_RATING", "PACE",
+              ] = "TS_PCT",
+              season_type: SeasonType = SeasonType.REGULAR,
+              limit: int = Query(default=15, ge=1, le=100)):
+    return league.improvers(season or current_season(), metric, str(season_type),
                             limit)
 
 
-@router.get("/league/similar/{player_id}")
-def similar(player_id: int, season: str | None = None,
-            season_type: str = "Regular Season", limit: int = 8):
+@router.get("/league/similar/{player_id}", response_model=JsonObject)
+def similar(player_id: PlayerId, season: Season | None = None,
+            season_type: SeasonType = SeasonType.REGULAR,
+            limit: int = Query(default=8, ge=1, le=25)):
     return league.similar_players(player_id, season or current_season(),
-                                  season_type, limit)
+                                  str(season_type), limit)
 
 
-@router.get("/league/low-minutes-efficient")
-def low_minutes(season: str | None = None,
-                season_type: str = "Regular Season",
-                max_mpg: float = 24, limit: int = 15):
+@router.get("/league/low-minutes-efficient", response_model=JsonObjectList)
+def low_minutes(season: Season | None = None,
+                season_type: SeasonType = SeasonType.REGULAR,
+                max_mpg: float = Query(default=24, ge=10, le=35),
+                limit: int = Query(default=15, ge=1, le=100)):
     return league.low_minutes_efficient(season or current_season(),
-                                        season_type, max_mpg, limit)
+                                        str(season_type), max_mpg, limit)
 
 
-@router.get("/league/team-defense")
-def team_defense(season: str | None = None,
-                 season_type: str = "Regular Season"):
-    return league.team_defense(season or current_season(), season_type)
+@router.get("/league/team-defense", response_model=JsonObjectList)
+def team_defense(season: Season | None = None,
+                 season_type: SeasonType = SeasonType.REGULAR):
+    return league.team_defense(season or current_season(), str(season_type))

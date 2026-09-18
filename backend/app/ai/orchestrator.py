@@ -11,8 +11,11 @@ import os
 import re
 import threading
 import time
+from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -26,7 +29,9 @@ VERDICTS = ["Supported", "Mostly supported", "Mixed", "Misleading",
 PROMPT_VERSION = "2026-07-18.1"
 DEFAULT_CACHE_TTL_SECONDS = 12 * 3600
 DEFAULT_MAX_OUTPUT_TOKENS = 1600
-DEFAULT_MAX_REMOTE_CALLS = 6
+DEFAULT_MAX_REMOTE_CALLS = 4
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 25
+DEFAULT_GLOBAL_REPORTS_PER_MINUTE = 8
 
 
 class Finding(BaseModel):
@@ -114,8 +119,10 @@ _TOOLS_BY_MODE = {
     "game": [tools.list_games, tools.investigate_game],
 }
 
-_request_locks: dict[str, threading.Lock] = {}
+_request_locks: dict[str, tuple[threading.Lock, int]] = {}
 _request_locks_guard = threading.Lock()
+_report_budget: deque[float] = deque()
+_report_budget_lock = threading.Lock()
 
 
 class AiUnavailable(Exception):
@@ -132,6 +139,11 @@ def _positive_int_env(name: str, default: int) -> int:
     except ValueError:
         return default
     return value if value > 0 else default
+
+
+_ai_slots = threading.BoundedSemaphore(
+    _positive_int_env("AI_MAX_CONCURRENT_REPORTS", 2)
+)
 
 
 def tools_for_mode(mode: str) -> list:
@@ -154,10 +166,36 @@ def _cache_key(question: str, mode: str, context: dict | None,
     return "ai-report:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def _request_lock(key: str) -> threading.Lock:
+@contextmanager
+def _request_lock(key: str) -> Iterator[None]:
     """Coalesce identical in-flight requests in this backend process."""
     with _request_locks_guard:
-        return _request_locks.setdefault(key, threading.Lock())
+        lock, users = _request_locks.get(key, (threading.Lock(), 0))
+        _request_locks[key] = (lock, users + 1)
+    lock.acquire()
+    try:
+        yield
+    finally:
+        lock.release()
+        with _request_locks_guard:
+            current_lock, users = _request_locks.get(key, (lock, 1))
+            if current_lock is lock and users <= 1:
+                _request_locks.pop(key, None)
+            elif current_lock is lock:
+                _request_locks[key] = (lock, users - 1)
+
+
+def _reserve_report_budget() -> None:
+    now = time.monotonic()
+    limit = _positive_int_env(
+        "AI_GLOBAL_REPORTS_PER_MINUTE", DEFAULT_GLOBAL_REPORTS_PER_MINUTE
+    )
+    with _report_budget_lock:
+        while _report_budget and _report_budget[0] <= now - 60:
+            _report_budget.popleft()
+        if len(_report_budget) >= limit:
+            raise AiRateLimited("AI Mode reached its global request budget. Try again shortly.")
+        _report_budget.append(now)
 
 
 def _cached_report(key: str) -> dict | None:
@@ -201,12 +239,23 @@ def _usage(response) -> dict:
 
 def _client():
     from google import genai
+    from google.genai import types
+
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key or key == "your-key-here":
         raise AiUnavailable(
             "No Gemini API key configured. Add GEMINI_API_KEY to backend/.env "
             "(free key: https://aistudio.google.com → Get API key).")
-    return genai.Client(api_key=key)
+    timeout_ms = _positive_int_env(
+        "AI_REQUEST_TIMEOUT_SECONDS", DEFAULT_REQUEST_TIMEOUT_SECONDS
+    ) * 1000
+    return genai.Client(
+        api_key=key,
+        http_options=types.HttpOptions(
+            timeout=timeout_ms,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
 
 
 def _extract_json(text: str) -> dict:
@@ -317,17 +366,6 @@ def _generate_report(question: str, mode: str, context: dict | None,
         except errors.ClientError as err:
             if getattr(err, "code", None) == 429 or "429" in str(err):
                 last_err = err
-                # Per-minute limit with a short reset? Wait it out once, then
-                # retry the same model before falling back.
-                m = re.search(r"retry in ([\d.]+)s", str(err))
-                if m and float(m.group(1)) <= 35 and "limit: 0" not in str(err):
-                    time.sleep(float(m.group(1)) + 1)
-                    try:
-                        response = _attempt(candidate)
-                        model = candidate
-                        break
-                    except (errors.ClientError, errors.ServerError) as err2:
-                        last_err = err2
                 continue  # next model — each has its own quota
             if getattr(err, "code", None) in (401, 403) or "API key" in str(err):
                 raise AiUnavailable(
@@ -365,7 +403,7 @@ def _generate_report(question: str, mode: str, context: dict | None,
     report.setdefault("links", [])
     report["tool_trace"] = _tool_trace(response)
     report["model"] = model
-    report["generated_at"] = datetime.now(timezone.utc).isoformat()
+    report["generated_at"] = datetime.now(UTC).isoformat()
     report["usage"] = _usage(response)
     report["model_attempts"] = model_attempts
     report["cached"] = False
@@ -397,7 +435,13 @@ def ask(question: str, mode: str = "auto",
     with _request_lock(key):
         if hit := _cached_report(key):
             return hit
-        report = _generate_report(
-            question, effective_mode, context, requested_model)
-        _store_report(key, report)
-        return report
+        if not _ai_slots.acquire(timeout=1):
+            raise AiRateLimited("AI Mode is busy. Try again shortly.")
+        try:
+            _reserve_report_budget()
+            report = _generate_report(
+                question, effective_mode, context, requested_model)
+            _store_report(key, report)
+            return report
+        finally:
+            _ai_slots.release()

@@ -3,8 +3,7 @@
 Boxscore/play-by-play use the V3 endpoints (camelCase nested JSON).
 """
 import re
-
-import pandas as pd
+from contextlib import suppress
 
 from ..nba import api
 from . import frames, shooting
@@ -128,10 +127,8 @@ def game_detail(player_id: int, game_id: str) -> dict:
     shots = shooting.shot_profile(player_id, season, season_type, game_id=game_id)
 
     actions = []
-    try:
+    with suppress(RuntimeError):
         actions = api.play_by_play(game_id)
-    except RuntimeError:
-        pass
 
     return {
         "game_id": game_id,

@@ -17,7 +17,7 @@ def season_trends(player_id: int, season: str,
                   window: int = 10) -> dict:
     df = frames.merged_logs(player_id, season, season_type)
     if df.empty or len(df) < 3:
-        return {"games": int(len(df)), "series": [], "season": season}
+        return {"games": len(df), "series": [], "season": season}
 
     w = min(window, max(3, len(df) // 3))
     roll = pd.DataFrame({
@@ -56,7 +56,7 @@ def season_trends(player_id: int, season: str,
     return {
         "season": season,
         "season_type": season_type,
-        "games": int(len(df)),
+        "games": len(df),
         "window": w,
         "series": series,
         "recent_form": form,

@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.nba.seasons import forward_roster_season, next_season  # noqa: E402
-from app.services import players  # noqa: E402
+from app.nba.seasons import forward_roster_season, next_season
+from app.services import players
 
 
 def row(player_id: int, first: str, last: str, team: str,

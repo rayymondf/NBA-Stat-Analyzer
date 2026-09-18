@@ -1,13 +1,82 @@
 """Gemini function tools. Every tool wraps a service that computes real
 statistics — the model itself never calculates numbers. Outputs are trimmed
 to keep token usage low on the free tier."""
-from ..nba.seasons import current_season, previous_season
-from ..services import (compare, efficiency, frames, game_investigation,
-                        impact as impact_svc, league, ml, players, playoffs,
-                        shooting, trends)
+import re
 
+from ..nba.seasons import current_season, previous_season
+from ..services import (
+    compare,
+    efficiency,
+    frames,
+    game_investigation,
+    league,
+    ml,
+    players,
+    playoffs,
+    shooting,
+    trends,
+)
+from ..services import impact as impact_svc
 
 SMALL_SAMPLE_GAMES = 15
+SEASON_RE = re.compile(r"^(\d{4})-(\d{2})$")
+TEAM_RE = re.compile(r"^[A-Z]{2,4}$")
+GAME_ID_RE = re.compile(r"^\d{10}$")
+SEASON_TYPES = {"Regular Season", "Playoffs"}
+LEAGUE_QUERY_KINDS = {
+    "leaders", "improvers", "low_minutes_efficient", "team_defense",
+}
+LEADER_STATS = {
+    "PTS", "REB", "AST", "STL", "BLK", "TOV", "MIN", "FGM", "FGA",
+    "FG_PCT", "FG3M", "FG3A", "FG3_PCT", "FTM", "FTA", "FT_PCT",
+    "OREB", "DREB", "PLUS_MINUS",
+}
+
+
+def _bounded_int(value: int, name: str, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an integer")
+    if not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return value
+
+
+def _player_id(value: int) -> int:
+    return _bounded_int(value, "player_id", 1, 9_999_999_999)
+
+
+def _season(value: str) -> str:
+    resolved = (value or current_season()).strip()
+    match = SEASON_RE.fullmatch(resolved)
+    if not match:
+        raise ValueError("season must use YYYY-YY format")
+    start = int(match.group(1))
+    if int(match.group(2)) != (start + 1) % 100:
+        raise ValueError("season end year must follow its start year")
+    current_start = int(current_season()[:4])
+    if not 1946 <= start <= current_start + 1:
+        raise ValueError("season is outside the supported NBA range")
+    return resolved
+
+
+def _season_type(value: str) -> str:
+    if value not in SEASON_TYPES:
+        raise ValueError(f"season_type must be one of {sorted(SEASON_TYPES)}")
+    return value
+
+
+def _team(value: str) -> str:
+    resolved = value.strip().upper()
+    if resolved and not TEAM_RE.fullmatch(resolved):
+        raise ValueError("team/opponent must be a 2-4 letter abbreviation")
+    return resolved
+
+
+def _game_id(value: str) -> str:
+    resolved = str(value).strip()
+    if not GAME_ID_RE.fullmatch(resolved):
+        raise ValueError("game_id must be exactly 10 digits")
+    return resolved
 
 
 def _round(obj, nd=3):
@@ -35,8 +104,11 @@ def search_player(name: str) -> list[dict]:
     """Find NBA players by name (misspellings tolerated). Returns player_id,
     team and position for the best matches — always call this first when you
     only have a name."""
+    resolved = name.strip()
+    if not 2 <= len(resolved) <= 80 or any(ord(char) < 32 for char in resolved):
+        raise ValueError("name must contain 2-80 printable characters")
     return [{k: r[k] for k in ("player_id", "name", "team", "position")}
-            for r in players.search(name, limit=5)]
+            for r in players.search(resolved, limit=5)]
 
 
 def get_elimination_game_stats(player_id: int, seasons_back: int = 6) -> dict:
@@ -45,7 +117,9 @@ def get_elimination_game_stats(player_id: int, seasons_back: int = 6) -> dict:
     their overall playoff baseline. Covers the last `seasons_back` seasons and
     includes each elimination game line as evidence. Use this for questions
     like 'is X bad in elimination games / win-or-go-home games'."""
-    out = playoffs.elimination_stats(player_id, seasons_back)
+    out = playoffs.elimination_stats(
+        _player_id(player_id), _bounded_int(seasons_back, "seasons_back", 1, 20)
+    )
     lines = (out.get("elimination") or {}).get("game_lines")
     if isinstance(lines, list) and len(lines) > 12:
         # Cap evidence rows: every row costs input tokens on the free tier.
@@ -62,12 +136,19 @@ def get_player_stats(player_id: int, season: str = "", season_type: str = "Regul
     outcome: 'W'/'L'. last_n: only the most recent N games. opponent: team
     abbreviation like 'BOS'. Returns totals, per-game, per-75 and shooting
     efficiency for the filtered games."""
+    resolved_location = location.strip().lower()
+    if resolved_location not in {"", "home", "away"}:
+        raise ValueError("location must be home or away")
+    resolved_outcome = outcome.strip().upper()
+    if resolved_outcome not in {"", "W", "L"}:
+        raise ValueError("outcome must be W or L")
     f = frames.LogFilters(
-        season=season or current_season(), season_type=season_type,
-        location=location or None, outcome=outcome or None,
-        last_n=last_n or None, opponent=opponent or None,
+        season=_season(season), season_type=_season_type(season_type),
+        location=resolved_location or None, outcome=resolved_outcome or None,
+        last_n=_bounded_int(last_n, "last_n", 0, 82) or None,
+        opponent=_team(opponent) or None,
     )
-    b = players.stat_bundle(player_id, f)
+    b = players.stat_bundle(_player_id(player_id), f)
     s = b["stats"]
     out = _round({
         "filters": b["filters"],
@@ -85,7 +166,9 @@ def get_player_percentiles(player_id: int, season: str = "",
                            season_type: str = "Regular Season") -> dict:
     """Position percentiles (0-100, higher = better) plus advanced metrics for
     a player's season: scoring, efficiency, usage, ratings."""
-    eff = efficiency.efficiency(player_id, season or current_season(), season_type)
+    eff = efficiency.efficiency(
+        _player_id(player_id), _season(season), _season_type(season_type)
+    )
     return _round({
         "games": eff.get("games"),
         "metrics": eff.get("metrics"),
@@ -97,7 +180,9 @@ def get_player_percentiles(player_id: int, season: str = "",
 def get_shot_profile(player_id: int, season: str = "",
                      season_type: str = "Regular Season") -> dict:
     """Shooting by court zone vs league average, by distance, and totals."""
-    p = shooting.shot_profile(player_id, season or current_season(), season_type)
+    p = shooting.shot_profile(
+        _player_id(player_id), _season(season), _season_type(season_type)
+    )
     return _round({
         "totals": p.get("totals"),
         "zones": p.get("zones"),
@@ -109,8 +194,10 @@ def get_trends(player_id: int, season: str = "",
                season_type: str = "Regular Season") -> dict:
     """Recent form vs season baseline (points/TS%, incl. a z-score for how
     unusual the last 10 games are) and rolling trend endpoints."""
-    resolved = season or current_season()
-    t = trends.season_trends(player_id, resolved, season_type)
+    resolved = _season(season)
+    t = trends.season_trends(
+        _player_id(player_id), resolved, _season_type(season_type)
+    )
     series = t.get("series") or []
     out = _round({
         "games": t.get("games"),
@@ -126,7 +213,7 @@ def get_trends(player_id: int, season: str = "",
 
 def get_career(player_id: int) -> dict:
     """Season-by-season career averages (regular season + playoffs)."""
-    c = trends.career(player_id)
+    c = trends.career(_player_id(player_id))
     return _round({
         "regular_season": c.get("regular_season", [])[-12:],
         "playoffs": c.get("playoffs", [])[-6:],
@@ -137,7 +224,10 @@ def compare_players(player_a: int, player_b: int, season: str = "",
                     season_type: str = "Regular Season") -> dict:
     """Side-by-side comparison: per-game, per-75, shooting efficiency,
     position percentiles and shot zones for two players."""
-    c = compare.compare(player_a, player_b, season or current_season(), season_type)
+    c = compare.compare(
+        _player_id(player_a), _player_id(player_b), _season(season),
+        _season_type(season_type),
+    )
 
     def trim(block: dict) -> dict:
         return {
@@ -161,7 +251,13 @@ def league_query(kind: str, season: str = "", stat: str = "PTS",
     'improvers' (biggest TS% improvement vs last season),
     'low_minutes_efficient' (efficient scorers under 24 MPG),
     'team_defense' (team defensive-rating rankings, best first)."""
-    season = season or current_season()
+    season = _season(season)
+    if kind not in LEAGUE_QUERY_KINDS:
+        raise ValueError(f"kind must be one of {sorted(LEAGUE_QUERY_KINDS)}")
+    limit = _bounded_int(limit, "limit", 1, 25)
+    stat = stat.strip().upper()
+    if stat not in LEADER_STATS:
+        raise ValueError("stat is not an allowed leaderboard statistic")
     if kind == "leaders":
         return _round(league.leaders(season, stat=stat, limit=limit))
     if kind == "improvers":
@@ -170,12 +266,12 @@ def league_query(kind: str, season: str = "", stat: str = "PTS",
         return _round(league.low_minutes_efficient(season, limit=limit))
     if kind == "team_defense":
         return _round(league.team_defense(season))
-    return [{"error": f"unknown kind '{kind}'"}]
+    raise AssertionError("validated league query kind was not handled")
 
 
 def find_similar_players(player_id: int, season: str = "") -> dict:
     """Statistically similar players (z-scored per-100 profile distance)."""
-    s = league.similar_players(player_id, season or current_season())
+    s = league.similar_players(_player_id(player_id), _season(season))
     return _round({
         "features": s.get("features"),
         "matches": [{k: m[k] for k in ("player_id", "name", "team", "distance")}
@@ -187,8 +283,10 @@ def find_similar_players(player_id: int, season: str = "") -> dict:
 def list_games(team: str = "", season: str = "", limit: int = 10) -> list[dict]:
     """Recent completed games, newest first. team = abbreviation like 'NYK'.
     Use this to find a game_id before investigating a game."""
-    games = game_investigation.list_games(season or current_season(),
-                                          team=team or None, limit=limit)
+    games = game_investigation.list_games(
+        _season(season), team=_team(team) or None,
+        limit=_bounded_int(limit, "limit", 1, 50),
+    )
     return [{
         "game_id": g["game_id"], "date": str(g["date"])[:10],
         "home": f"{g['home']['abbr']} {g['home']['pts']}",
@@ -200,7 +298,7 @@ def investigate_game(game_id: str) -> dict:
     """Full why-did-they-win/lose investigation for a completed game:
     ranked explanations with evidence for and against, four factors, star
     performances vs season averages, scoring runs and Q4 execution."""
-    inv = game_investigation.investigate(game_id)
+    inv = game_investigation.investigate(_game_id(game_id))
     inv.pop("teams", None)
     # The detailed evidence_for arrays duplicate four_factors, star_lines, runs
     # and q4 below. Keep summaries and counterevidence while avoiding hundreds
@@ -217,9 +315,13 @@ def investigate_game(game_id: str) -> dict:
 def get_game_log(player_id: int, season: str = "",
                  season_type: str = "Regular Season", last_n: int = 10) -> list[dict]:
     """Recent game-by-game lines for a player (newest first)."""
-    f = frames.LogFilters(season=season or current_season(),
-                          season_type=season_type, last_n=last_n or None)
-    df = frames.apply_filters(frames.merged_logs(player_id, f.season, f.season_type), f)
+    f = frames.LogFilters(
+        season=_season(season), season_type=_season_type(season_type),
+        last_n=_bounded_int(last_n, "last_n", 1, 82),
+    )
+    df = frames.apply_filters(
+        frames.merged_logs(_player_id(player_id), f.season, f.season_type), f
+    )
     rows = frames.game_rows(df)[::-1]
     return [{k: r[k] for k in ("game_id", "date", "matchup", "wl", "min", "pts",
                                "reb", "ast", "tov", "pf", "plus_minus", "ts_pct")}
@@ -229,16 +331,18 @@ def get_game_log(player_id: int, season: str = "",
 def get_on_off_impact(player_id: int, season: str = "") -> dict:
     """On/off net-rating estimate: how the team performs with the player on
     vs off the court. Estimates only — noisy in small samples."""
+    player_id = _player_id(player_id)
+    resolved_season = _season(season)
     info = players.bio(player_id)
     if not info.get("team_id"):
         return {"error": "player has no current team"}
-    r = impact_svc.impact(player_id, info["team_id"], season or current_season())
+    r = impact_svc.impact(player_id, info["team_id"], resolved_season)
     return _round({"current": r.get("current"), "disclaimer": r.get("disclaimer")})
 
 
 def get_previous_season(season: str) -> dict:
     """The season string before the given one (e.g. '2025-26' -> '2024-25')."""
-    return {"previous_season": previous_season(season)}
+    return {"previous_season": previous_season(_season(season))}
 
 
 def get_shot_quality(player_id: int, season: str = "",
@@ -248,7 +352,9 @@ def get_shot_quality(player_id: int, season: str = "",
     Positive delta = makes more than expected (shot-making skill beyond shot
     selection); includes per-zone deltas and a league percentile. This is a
     trained-model estimate — label it as such when citing it."""
-    q = ml.shot_quality(player_id, season or None, season_type)
+    q = ml.shot_quality(
+        _player_id(player_id), _season(season), _season_type(season_type)
+    )
     q.pop("explanation", None)
     return _round(q)
 

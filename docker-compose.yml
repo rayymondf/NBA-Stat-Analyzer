@@ -1,0 +1,20 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      APP_ENV: production
+      EXPOSE_API_DOCS: "true"
+      TRUSTED_HOSTS: localhost,127.0.0.1,testserver
+      NBA_DATA_DIR: /app/backend/data
+    volumes:
+      - nba-data:/app/backend/data
+    restart: unless-stopped
+
+volumes:
+  nba-data:

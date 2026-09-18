@@ -1,5 +1,5 @@
-import unittest
 import sys
+import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -63,6 +63,25 @@ class OrchestratorTests(unittest.TestCase):
     def test_invalid_mode_is_rejected_before_api_call(self):
         with self.assertRaises(ValueError):
             orchestrator.ask("Question", "invalid")
+
+    def test_request_lock_entry_is_removed_after_use(self):
+        key = "test-lock-cleanup"
+        with orchestrator._request_lock(key):
+            self.assertIn(key, orchestrator._request_locks)
+        self.assertNotIn(key, orchestrator._request_locks)
+
+    def test_tool_inputs_are_bounded_before_service_calls(self):
+        invalid_calls = (
+            lambda: tools.search_player("x"),
+            lambda: tools.get_player_stats(0),
+            lambda: tools.get_player_stats(1, season="2025-99"),
+            lambda: tools.league_query("leaders", limit=10_000),
+            lambda: tools.list_games(team="NOT-A-TEAM"),
+            lambda: tools.investigate_game("123"),
+        )
+        for invalid_call in invalid_calls:
+            with self.subTest(call=invalid_call), self.assertRaises(ValueError):
+                invalid_call()
 
     @patch("app.ai.orchestrator._store_report")
     @patch("app.ai.orchestrator._generate_report")

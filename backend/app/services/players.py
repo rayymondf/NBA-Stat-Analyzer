@@ -93,7 +93,7 @@ def search(query: str, limit: int = 12) -> list[dict]:
             scored.append((0 if starts else 1, full, r))
     if not scored:
         # Typo tolerance: "daminion lilard" should still find Damian Lillard.
-        by_name = {}
+        by_name: dict[str, tuple[str, dict]] = {}
         for r in idx:
             full = f"{r['PLAYER_FIRST_NAME']} {r['PLAYER_LAST_NAME']}".strip()
             by_name.setdefault(full.lower(), (full, r))
@@ -101,8 +101,8 @@ def search(query: str, limit: int = 12) -> list[dict]:
         if not close and len(q.split()) > 1:
             # Match on last name alone ("lilard" -> Lillard)
             last = q.split()[-1]
-            last_map = {}
-            for low, (full, r) in by_name.items():
+            last_map: dict[str, list[str]] = {}
+            for low, (_full, _row) in by_name.items():
                 last_map.setdefault(low.split()[-1], []).append(low)
             for hit in difflib.get_close_matches(last, last_map.keys(), n=3,
                                                  cutoff=0.7):
@@ -233,7 +233,7 @@ def stat_bundle(player_id: int, f: frames.LogFilters) -> dict:
     agg = frames.aggregate(filtered)
     return {
         "filters": f.__dict__,
-        "season_games": int(len(df)),
+        "season_games": len(df),
         "stats": agg,
     }
 
