@@ -32,10 +32,10 @@ function ThemeToggle() {
 }
 
 const navLink = ({ isActive }: { isActive: boolean }) =>
-  `px-2.5 py-1.5 text-[12px] uppercase tracking-[0.08em] font-medium transition-colors border-b-2 -mb-px ${
+  `px-3 py-1.5 text-[13px] rounded-lg font-medium transition-colors ${
     isActive
-      ? "text-ink border-ink"
-      : "text-ink-muted border-transparent hover:text-ink"
+      ? "text-ink bg-surface-2"
+      : "text-ink-muted hover:text-ink hover:bg-surface"
   }`;
 
 function DataFreshnessFooter() {
@@ -77,23 +77,31 @@ export default function App() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-edge bg-page/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 min-h-14 py-2 flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
-          <NavLink to="/" className="hidden sm:flex items-center mr-3 shrink-0">
-            <span className="font-display font-semibold text-lg tracking-tight">
+          <NavLink to="/" className="flex items-center gap-2 mr-2 shrink-0">
+            <span
+              className="w-6 h-6 rounded-md grid place-items-center text-[13px] font-bold text-white shrink-0"
+              style={{ background: "var(--series-1)" }}
+              aria-hidden="true"
+            >
+              N
+            </span>
+            <span className="hidden sm:block font-display font-semibold text-lg tracking-tight">
               NBA Stat Analyzer
             </span>
           </NavLink>
-          <nav className="order-last sm:order-none w-full sm:w-auto flex items-center gap-1 self-stretch overflow-x-auto">
-            <span className="flex items-center"><NavLink to="/" className={navLink} end>Players</NavLink></span>
-            <span className="flex items-center"><NavLink to="/games" className={navLink}>Games</NavLink></span>
-            <span className="flex items-center"><NavLink to="/model" className={navLink}>The Model</NavLink></span>
-            <span className="flex items-center">
-              <NavLink to="/ai" className={navLink}>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--series-7)" }} />
-                  AI Mode
-                </span>
-              </NavLink>
-            </span>
+          <nav
+            aria-label="Primary"
+            className="order-last sm:order-none w-full sm:w-auto flex items-center gap-1 self-stretch overflow-x-auto"
+          >
+            <NavLink to="/" className={navLink} end>Players</NavLink>
+            <NavLink to="/games" className={navLink}>Games</NavLink>
+            <NavLink to="/model" className={navLink}>The Model</NavLink>
+            <NavLink to="/ai" className={navLink}>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--series-7)" }} />
+                AI Mode
+              </span>
+            </NavLink>
           </nav>
           <div className="flex-1" />
           <button

@@ -22,7 +22,7 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
   return (
     <div className="py-6">
       {/* ---- Cover ---- */}
-      <section className="max-w-3xl mx-auto text-center pt-10 pb-12 section-in">
+      <section className="hero-glow max-w-3xl mx-auto text-center pt-10 pb-12 section-in">
         <div className="eyebrow mb-3">The season, quantified</div>
         <h1 className="font-display text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05]">
           <span className="block sm:whitespace-nowrap">Explore NBA stats.</span>
@@ -107,7 +107,7 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
       <section className="mb-12">
         <Link
           to="/model"
-          className="card p-6 flex flex-wrap items-center gap-5 hover:border-ink-muted transition-colors group block"
+          className="card card-hover p-6 flex flex-wrap items-center gap-5 group block"
         >
           <div className="flex-1 min-w-64">
             <div className="eyebrow mb-1.5">Machine learning</div>
@@ -132,7 +132,7 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
             <button
               key={q}
               onClick={() => navigate("/ai", { state: { question: q } })}
-              className="card p-4 text-left text-sm text-ink-2 hover:border-ink-muted hover:text-ink transition-colors"
+              className="card card-hover p-4 text-left text-sm text-ink-2 hover:text-ink transition-colors"
             >
               <span className="mr-2" style={{ color: "var(--series-7)" }}>✦</span>
               {q}

@@ -70,8 +70,8 @@ export function HowItsMade({ children }: { children: ReactNode }) {
   );
 }
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`card p-5 ${className}`}>{children}</div>;
+export function Card({ children, className = "", hover = false }: { children: ReactNode; className?: string; hover?: boolean }) {
+  return <div className={`card p-5 ${hover ? "card-hover" : ""} ${className}`}>{children}</div>;
 }
 
 export function CardTitle({ children, tip }: { children: ReactNode; tip?: string }) {
