@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type ShotPoint } from "../../lib/api";
 import { num, pct } from "../../lib/format";
 import ShotChart from "../ShotChart";
+import ShotDifficultyExplainer from "../model/ShotDifficultyExplainer";
 import { Card, CardTitle, ErrorState, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
@@ -170,6 +171,10 @@ export default function ShootingSection({ playerId, filters }: {
                 See the full model breakdown
               </Link>
             </Card>
+          )}
+
+          {quality?.available && (
+            <ShotDifficultyExplainer playerId={playerId} filters={filters} />
           )}
 
           {sb.pct_ast_fgm != null && (

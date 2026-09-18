@@ -256,6 +256,12 @@ export type ModelAvailable = ModelInfoAvailable;
 export type ModelUnavailable = ModelInfoUnavailable;
 export type ModelInfo = ModelInfoAvailable | ModelInfoUnavailable;
 
+// Shot-difficulty explainer (SHAP), derived from the OpenAPI contract.
+export type ShotExplainer = components["schemas"]["ShotExplainerAvailable"];
+export type ShotExplainerUnavailable = components["schemas"]["ShotExplainerUnavailable"];
+export type ShotExplainerResponse = ShotExplainer | ShotExplainerUnavailable;
+export type FeatureContribution = components["schemas"]["FeatureContribution"];
+
 export interface ListedGameTeam { team_id: number; abbr: string; name: string; pts: number; wl: string }
 export interface ListedGame { game_id: string; date: string; home: ListedGameTeam; away: ListedGameTeam }
 export interface Evidence { label: string; value: string | number }

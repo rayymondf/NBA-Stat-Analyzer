@@ -6,12 +6,23 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ..config import get_settings
-from ..schemas import ModelInfoResponse
+from ..routing import PlayerId, Season, SeasonType
+from ..schemas import ModelInfoResponse, ShotExplainerResponse
 from ..services import ml
 
 router = APIRouter(prefix="/ml", tags=["ml"])
 
 CSV_PATH = str(get_settings().data_dir / "shots_export.csv")
+
+
+@router.get("/players/{player_id}/shot-explainer", response_model=ShotExplainerResponse)
+def shot_explainer(
+    player_id: PlayerId,
+    season: Season | None = None,
+    season_type: SeasonType = SeasonType.REGULAR,
+):
+    """Which shot-context features most drive the model's make-probability estimate."""
+    return ml.shot_difficulty_explainer(player_id, season, str(season_type))
 
 
 @router.get("/model-info", response_model=ModelInfoResponse)

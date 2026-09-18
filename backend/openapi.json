@@ -121,6 +121,40 @@
         "title": "DriftEntry",
         "type": "object"
       },
+      "FeatureContribution": {
+        "description": "Mean SHAP contribution of one feature to the model's make-probability.",
+        "properties": {
+          "direction": {
+            "title": "Direction",
+            "type": "string"
+          },
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mean_abs_impact": {
+            "title": "Mean Abs Impact",
+            "type": "number"
+          },
+          "mean_signed_impact": {
+            "title": "Mean Signed Impact",
+            "type": "number"
+          }
+        },
+        "required": [
+          "feature",
+          "label",
+          "mean_abs_impact",
+          "mean_signed_impact",
+          "direction"
+        ],
+        "title": "FeatureContribution",
+        "type": "object"
+      },
       "FeatureImportance": {
         "properties": {
           "feature": {
@@ -490,6 +524,71 @@
         ],
         "title": "SeasonType",
         "type": "string"
+      },
+      "ShotExplainerAvailable": {
+        "properties": {
+          "available": {
+            "const": true,
+            "default": true,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureContribution"
+            },
+            "title": "Contributions",
+            "type": "array"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "integer"
+          },
+          "season": {
+            "title": "Season",
+            "type": "string"
+          },
+          "season_type": {
+            "title": "Season Type",
+            "type": "string"
+          },
+          "shots_explained": {
+            "title": "Shots Explained",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "season",
+          "season_type",
+          "shots_explained",
+          "model_version",
+          "explanation"
+        ],
+        "title": "ShotExplainerAvailable",
+        "type": "object"
+      },
+      "ShotExplainerUnavailable": {
+        "properties": {
+          "available": {
+            "const": false,
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ShotExplainerUnavailable",
+        "type": "object"
       }
     }
   },
@@ -2041,6 +2140,147 @@
           }
         },
         "summary": "Model Info",
+        "tags": [
+          "ml"
+        ]
+      }
+    },
+    "/api/v1/ml/players/{player_id}/shot-explainer": {
+      "get": {
+        "description": "Which shot-context features most drive the model's make-probability estimate.",
+        "operationId": "shot_explainer_api_v1_ml_players__player_id__shot_explainer_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "player_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Player Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "examples": [
+                    "2025-26"
+                  ],
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Season"
+            }
+          },
+          {
+            "in": "query",
+            "name": "season_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SeasonType",
+              "default": "Regular Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ShotExplainerAvailable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ShotExplainerUnavailable"
+                    }
+                  ],
+                  "title": "Response Shot Explainer Api V1 Ml Players  Player Id  Shot Explainer Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Shot Explainer",
         "tags": [
           "ml"
         ]

@@ -155,3 +155,44 @@ def test_production_model_requires_checksum_pin(tmp_path, monkeypatch):
 
     assert ml.load_model() is None
     assert ml.model_status()["error"] == "artifact_pin_required"
+
+
+
+def test_shot_difficulty_explainer_attributes_features(shots, monkeypatch):
+    import pytest
+    pytest.importorskip("shap")
+    from sklearn.ensemble import HistGradientBoostingClassifier
+
+    # Train a tiny real tree model so SHAP's TreeExplainer can run.
+    rng = np.random.default_rng(0)
+    base = pd.concat([shots.iloc[[0]]] * 60 + [shots.iloc[[1]]] * 60, ignore_index=True)
+    monkeypatch.setattr(ml, "_team_abbr", lambda: {1610612761: "TOR"})
+    features = ml.build_features(base, ml.FEATURE_COLUMNS)
+    target = (features["distance"].to_numpy() < 10).astype(int)
+    target[rng.integers(0, len(target), 10)] ^= 1  # a little noise
+    model = HistGradientBoostingClassifier(max_iter=30, random_state=0).fit(features, target)
+
+    monkeypatch.setattr(ml.api, "shot_chart", lambda *_a, **_k: {
+        "Shot_Chart_Detail": base.to_dict("records")
+    })
+    monkeypatch.setattr(ml, "load_model", lambda: {
+        "model": model,
+        "feature_columns": ml.FEATURE_COLUMNS,
+        "delta_distribution": [],
+        "meta": {"model_version": 2},
+    })
+
+    result = ml.shot_difficulty_explainer(1, "2025-26")
+    assert result["available"] is True
+    assert result["shots_explained"] > 0
+    assert result["contributions"], "expected at least one feature contribution"
+    top = result["contributions"][0]
+    assert {"feature", "label", "mean_abs_impact", "mean_signed_impact", "direction"} <= set(top)
+    assert top["mean_abs_impact"] >= result["contributions"][-1]["mean_abs_impact"]
+
+
+def test_shot_difficulty_explainer_unavailable_without_model(monkeypatch):
+    monkeypatch.setattr(ml, "load_model", lambda: None)
+    result = ml.shot_difficulty_explainer(1, "2025-26")
+    assert result["available"] is False
+    assert result["reason"]

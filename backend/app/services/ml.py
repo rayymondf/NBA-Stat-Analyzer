@@ -273,6 +273,133 @@ def _delta_percentile(delta: float, distribution: list[float]) -> int | None:
     return round((arr < delta).mean() * 100)
 
 
+def _base_estimator(model: object) -> object:
+    """Unwrap a CalibratedClassifierCV / FrozenEstimator to the fitted tree model.
+
+    SHAP's fast TreeExplainer needs the underlying gradient-boosted estimator; a
+    calibrated wrapper is not a tree. We best-effort unwrap and fall back to the
+    given model if the structure is unfamiliar.
+    """
+    calibrated = getattr(model, "calibrated_classifiers_", None)
+    if calibrated:
+        inner = getattr(calibrated[0], "estimator", None)
+        if inner is not None:
+            return getattr(inner, "estimator", inner)
+    return getattr(model, "estimator", model)
+
+
+# Human-readable labels for the model's feature groups, used by the explainer.
+_FEATURE_LABELS = {
+    "distance": "Shot distance",
+    "abs_x": "Horizontal court position",
+    "loc_y": "Distance up the court",
+    "angle": "Angle to the hoop",
+    "period": "Quarter",
+    "seconds_left_period": "Time left in period",
+    "is_three": "Three-point attempt",
+    "is_home": "Home court",
+}
+
+
+def _feature_label(column: str) -> str:
+    if column in _FEATURE_LABELS:
+        return _FEATURE_LABELS[column]
+    if column.startswith("zone_"):
+        return f"Zone: {column[5:]}"
+    if column.startswith("area_"):
+        return f"Court area: {column[5:]}"
+    if column.startswith("action_"):
+        return f"Shot type: {column[7:]}"
+    return column
+
+
+def shot_difficulty_explainer(
+    player_id: int,
+    season: str | None = None,
+    season_type: str = "Regular Season",
+    *,
+    max_shots: int = 400,
+    top_k: int = 8,
+) -> dict:
+    """Explain which shot-context features most drive the model's xFG estimate.
+
+    Returns mean absolute SHAP contributions per feature over a sample of the
+    player's shots. This attributes the *model's* difficulty estimate to inputs;
+    it is not a causal or pure-talent measure and never observes defenders,
+    contest, or video.
+    """
+    bundle = load_model()
+    if bundle is None:
+        return {"available": False,
+                "reason": "Model not trained yet. Run nba-pipeline train --help."}
+    try:
+        import shap
+    except ImportError:
+        return {"available": False,
+                "reason": "SHAP is not installed. Install the 'ml' extra to enable explanations."}
+
+    season = season or current_season()
+    data = api.shot_chart(player_id, season, season_type)
+    shots = pd.DataFrame(data.get("Shot_Chart_Detail", []))
+    if shots.empty:
+        return {"available": False, "reason": f"No shots for this player in {season}."}
+
+    model = bundle["model"]
+    columns = bundle.get("feature_columns") or FEATURE_COLUMNS
+    meta = bundle.get("meta", {})
+    model_version = int(meta.get("model_version", 1))
+    try:
+        features = build_features(shots, columns, strict=model_version >= 3)
+    except ValueError as exc:
+        return {"available": False, "reason": f"Shot context is incomplete: {exc}"}
+
+    if len(features) > max_shots:
+        features = features.sample(max_shots, random_state=42)
+
+    estimator = _base_estimator(model)
+    try:
+        explainer = shap.TreeExplainer(estimator)
+        shap_values = explainer.shap_values(features)
+    except Exception as exc:
+        log.warning("SHAP explanation failed (%s)", type(exc).__name__)
+        return {"available": False,
+                "reason": "Explanations are unavailable for the current model artifact."}
+
+    values = np.asarray(shap_values)
+    # Binary classifiers may return a per-class list/3D array; take the positive class.
+    if values.ndim == 3:
+        values = values[:, :, -1]
+    mean_abs = np.abs(values).mean(axis=0)
+    mean_signed = values.mean(axis=0)
+    order = np.argsort(mean_abs)[::-1][:top_k]
+    contributions = [
+        {
+            "feature": str(features.columns[i]),
+            "label": _feature_label(str(features.columns[i])),
+            "mean_abs_impact": round(float(mean_abs[i]), 5),
+            "mean_signed_impact": round(float(mean_signed[i]), 5),
+            "direction": "raises make probability" if mean_signed[i] >= 0 else "lowers make probability",
+        }
+        for i in order
+        if mean_abs[i] > 0
+    ]
+    return {
+        "available": True,
+        "season": season,
+        "season_type": season_type,
+        "shots_explained": len(features),
+        "model_version": model_version,
+        "contributions": contributions,
+        "explanation": (
+            "Each value is the average magnitude of a feature's contribution to "
+            "the model's per-shot make-probability estimate (SHAP). It attributes "
+            "the model's difficulty estimate to its inputs; it is not a causal or "
+            "pure-talent measure and never sees defenders, contest quality, or video."
+        ),
+    }
+
+
+
 def _shrunken_delta(
     raw_delta: float,
     probabilities: np.ndarray,

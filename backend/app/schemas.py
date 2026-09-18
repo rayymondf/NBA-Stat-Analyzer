@@ -121,3 +121,34 @@ class ModelInfoUnavailable(BaseModel):
 
 
 ModelInfoResponse = ModelInfoAvailable | ModelInfoUnavailable
+
+
+# --- Shot-difficulty explainer DTOs -----------------------------------------
+
+
+class FeatureContribution(BaseModel):
+    """Mean SHAP contribution of one feature to the model's make-probability."""
+
+    feature: str
+    label: str
+    mean_abs_impact: float
+    mean_signed_impact: float
+    direction: str
+
+
+class ShotExplainerAvailable(BaseModel):
+    available: Literal[True] = Field(True)
+    season: str
+    season_type: str
+    shots_explained: int
+    model_version: int
+    contributions: list[FeatureContribution] = Field(default_factory=list)
+    explanation: str
+
+
+class ShotExplainerUnavailable(BaseModel):
+    available: Literal[False] = Field(False)
+    reason: str
+
+
+ShotExplainerResponse = ShotExplainerAvailable | ShotExplainerUnavailable

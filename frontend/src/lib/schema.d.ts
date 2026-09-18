@@ -208,6 +208,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ml/players/{player_id}/shot-explainer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shot Explainer
+         * @description Which shot-context features most drive the model's make-probability estimate.
+         */
+        get: operations["shot_explainer_api_v1_ml_players__player_id__shot_explainer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/players/search": {
         parameters: {
             query?: never;
@@ -487,6 +507,22 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * FeatureContribution
+         * @description Mean SHAP contribution of one feature to the model's make-probability.
+         */
+        FeatureContribution: {
+            /** Direction */
+            direction: string;
+            /** Feature */
+            feature: string;
+            /** Label */
+            label: string;
+            /** Mean Abs Impact */
+            mean_abs_impact: number;
+            /** Mean Signed Impact */
+            mean_signed_impact: number;
+        };
         /** FeatureImportance */
         FeatureImportance: {
             /** Feature */
@@ -638,6 +674,38 @@ export interface components {
          * @enum {string}
          */
         SeasonType: "Regular Season" | "Playoffs";
+        /** ShotExplainerAvailable */
+        ShotExplainerAvailable: {
+            /**
+             * Available
+             * @default true
+             * @constant
+             */
+            available: true;
+            /** Contributions */
+            contributions?: components["schemas"]["FeatureContribution"][];
+            /** Explanation */
+            explanation: string;
+            /** Model Version */
+            model_version: number;
+            /** Season */
+            season: string;
+            /** Season Type */
+            season_type: string;
+            /** Shots Explained */
+            shots_explained: number;
+        };
+        /** ShotExplainerUnavailable */
+        ShotExplainerUnavailable: {
+            /**
+             * Available
+             * @default false
+             * @constant
+             */
+            available: false;
+            /** Reason */
+            reason: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -1618,6 +1686,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelInfoAvailable"] | components["schemas"]["ModelInfoUnavailable"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    shot_explainer_api_v1_ml_players__player_id__shot_explainer_get: {
+        parameters: {
+            query?: {
+                season?: string | null;
+                season_type?: components["schemas"]["SeasonType"];
+            };
+            header?: never;
+            path: {
+                player_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShotExplainerAvailable"] | components["schemas"]["ShotExplainerUnavailable"];
                 };
             };
             /** @description Not Found */
