@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 
 from ..config import get_settings
-from ..schemas import JsonObject
+from ..schemas import ModelInfoResponse
 from ..services import ml
 
 router = APIRouter(prefix="/ml", tags=["ml"])
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/ml", tags=["ml"])
 CSV_PATH = str(get_settings().data_dir / "shots_export.csv")
 
 
-@router.get("/model-info", response_model=JsonObject)
+@router.get("/model-info", response_model=ModelInfoResponse)
 def model_info():
     settings = get_settings()
     bundle = ml.load_model()

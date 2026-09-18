@@ -32,6 +32,46 @@ def test_v1_and_legacy_model_routes_are_compatible(monkeypatch):
     assert "x-data-cache" in current.headers
 
 
+def test_model_info_conforms_to_explicit_dto(monkeypatch):
+    from app.schemas import ModelInfoAvailable, ModelInfoUnavailable
+
+    # Loaded model -> the "available" DTO validates the payload shape.
+    bundle = {
+        "meta": {
+            "model_version": 3,
+            "n_shots": 657387,
+            "seasons": ["2023-24", "2024-25", "2025-26"],
+            "brier": 0.225,
+            "auc": 0.66,
+        },
+        "feature_columns": ["distance", "angle"],
+        "delta_distribution": [],
+        "evaluation": {"winner": "hist_gradient_boosting"},
+    }
+    monkeypatch.setattr("app.routers.ml.ml.load_model", lambda: bundle)
+    payload = client.get("/api/v1/ml/model-info").json()
+    validated = ModelInfoAvailable.model_validate(payload)
+    assert validated.available is True
+    assert validated.model_version == 3
+    assert validated.metrics.brier == 0.225
+
+    # No model -> the "unavailable" DTO validates.
+    monkeypatch.setattr("app.routers.ml.ml.load_model", lambda: None)
+    unavailable = client.get("/api/v1/ml/model-info").json()
+    validated_missing = ModelInfoUnavailable.model_validate(unavailable)
+    assert validated_missing.available is False
+    assert validated_missing.reason
+
+
+def test_model_info_openapi_uses_named_schemas():
+    schema = app.openapi()
+    response = schema["paths"]["/api/v1/ml/model-info"]["get"]["responses"]["200"]
+    body = response["content"]["application/json"]["schema"]
+    refs = str(body)
+    assert "ModelInfoAvailable" in refs and "ModelInfoUnavailable" in refs
+    assert "ModelMetrics" in schema["components"]["schemas"]
+
+
 def test_invalid_route_parameters_return_problem_details():
     response = client.get("/api/v1/games/not-a-game/investigate")
     assert response.status_code == 422

@@ -40,6 +40,105 @@
         "title": "AskRequest",
         "type": "object"
       },
+      "CalibrationPoint": {
+        "additionalProperties": true,
+        "description": "One row of a predicted-vs-actual calibration table.",
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "number"
+          },
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "predicted": {
+            "title": "Predicted",
+            "type": "number"
+          },
+          "shots": {
+            "title": "Shots",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket",
+          "predicted",
+          "actual",
+          "shots"
+        ],
+        "title": "CalibrationPoint",
+        "type": "object"
+      },
+      "DatasetInfo": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "default": 0,
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "usage_note": {
+            "title": "Usage Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "url",
+          "usage_note"
+        ],
+        "title": "DatasetInfo",
+        "type": "object"
+      },
+      "DriftEntry": {
+        "properties": {
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "psi": {
+            "title": "Psi",
+            "type": "number"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feature",
+          "psi",
+          "status"
+        ],
+        "title": "DriftEntry",
+        "type": "object"
+      },
+      "FeatureImportance": {
+        "properties": {
+          "feature": {
+            "title": "Feature",
+            "type": "string"
+          },
+          "importance": {
+            "title": "Importance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "feature",
+          "importance"
+        ],
+        "title": "FeatureImportance",
+        "type": "object"
+      },
       "JsonObject": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -65,6 +164,246 @@
         ],
         "title": "Location",
         "type": "string"
+      },
+      "ModelInfoAvailable": {
+        "additionalProperties": true,
+        "description": "Full metadata for a loaded xFG model, consumed by the \"The Model\" page.",
+        "properties": {
+          "available": {
+            "default": true,
+            "description": "True when a model bundle is loaded.",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "baseline": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/JsonValue"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
+          "calibration_by_distance": {
+            "items": {
+              "$ref": "#/components/schemas/CalibrationPoint"
+            },
+            "title": "Calibration By Distance",
+            "type": "array"
+          },
+          "calibration_by_time": {
+            "items": {
+              "$ref": "#/components/schemas/CalibrationPoint"
+            },
+            "title": "Calibration By Time",
+            "type": "array"
+          },
+          "confidence_intervals_95": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Confidence Intervals 95",
+            "type": "object"
+          },
+          "dataset": {
+            "$ref": "#/components/schemas/DatasetInfo"
+          },
+          "delta_distribution": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Delta Distribution",
+            "type": "array"
+          },
+          "drift": {
+            "items": {
+              "$ref": "#/components/schemas/DriftEntry"
+            },
+            "title": "Drift",
+            "type": "array"
+          },
+          "evaluation": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Evaluation",
+            "type": "object"
+          },
+          "feature_count": {
+            "default": 0,
+            "title": "Feature Count",
+            "type": "integer"
+          },
+          "feature_importance": {
+            "items": {
+              "$ref": "#/components/schemas/FeatureImportance"
+            },
+            "title": "Feature Importance",
+            "type": "array"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/ModelMetrics"
+          },
+          "model_version": {
+            "default": 1,
+            "title": "Model Version",
+            "type": "integer"
+          },
+          "n_shots": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Shots"
+          },
+          "seasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Seasons",
+            "type": "array"
+          },
+          "selected_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Model"
+          },
+          "trained_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trained At"
+          }
+        },
+        "required": [
+          "dataset"
+        ],
+        "title": "ModelInfoAvailable",
+        "type": "object"
+      },
+      "ModelInfoUnavailable": {
+        "description": "Returned when no model bundle is loaded yet.",
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ModelInfoUnavailable",
+        "type": "object"
+      },
+      "ModelMetrics": {
+        "additionalProperties": true,
+        "description": "Held-out classification metrics for the calibrated model.",
+        "properties": {
+          "auc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auc"
+          },
+          "average_precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Precision"
+          },
+          "brier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier"
+          },
+          "brier_naive": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier Naive"
+          },
+          "ece": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ece"
+          },
+          "log_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Loss"
+          },
+          "n_test": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Test"
+          }
+        },
+        "title": "ModelMetrics",
+        "type": "object"
       },
       "Outcome": {
         "enum": [
@@ -1584,7 +1923,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/JsonObject"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ModelInfoAvailable"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ModelInfoUnavailable"
+                    }
+                  ],
+                  "title": "Response Model Info Api V1 Ml Model Info Get"
                 }
               }
             },
