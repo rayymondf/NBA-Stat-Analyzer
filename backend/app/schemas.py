@@ -10,6 +10,8 @@ from. Endpoints not yet migrated continue to use the generic roots below and
 stay byte-for-byte compatible on ``/api/v1``.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, RootModel
 
 
@@ -72,6 +74,13 @@ class DriftEntry(BaseModel):
     status: str
 
 
+class Interval(BaseModel):
+    """A 95% bootstrap confidence interval."""
+
+    lower: float
+    upper: float
+
+
 class DatasetInfo(BaseModel):
     available: bool
     size_bytes: int = 0
@@ -84,8 +93,9 @@ class ModelInfoAvailable(BaseModel):
 
     model_config = ConfigDict(extra="allow", protected_namespaces=())
 
-    available: bool = Field(True, description="True when a model bundle is loaded.")
+    available: Literal[True] = Field(True, description="True when a model bundle is loaded.")
     model_version: int = 1
+    dataset_version: str | None = None
     n_shots: int | None = None
     seasons: list[str] = Field(default_factory=list)
     trained_at: str | None = None
@@ -98,7 +108,7 @@ class ModelInfoAvailable(BaseModel):
     selected_model: str | None = None
     feature_importance: list[FeatureImportance] = Field(default_factory=list)
     drift: list[DriftEntry] = Field(default_factory=list)
-    confidence_intervals_95: dict[str, JsonValue] = Field(default_factory=dict)
+    confidence_intervals_95: dict[str, Interval] = Field(default_factory=dict)
     evaluation: dict[str, JsonValue] = Field(default_factory=dict)
     dataset: DatasetInfo
 
@@ -106,7 +116,7 @@ class ModelInfoAvailable(BaseModel):
 class ModelInfoUnavailable(BaseModel):
     """Returned when no model bundle is loaded yet."""
 
-    available: bool = Field(False)
+    available: Literal[False] = Field(False)
     reason: str
 
 

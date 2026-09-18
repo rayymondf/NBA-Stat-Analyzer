@@ -1,3 +1,5 @@
+import type { components } from "./schema.d.ts";
+
 export type NullableNumber = number | null;
 export type NumericMap = Record<string, NullableNumber>;
 export type JsonPrimitive = string | number | boolean | null;
@@ -242,23 +244,17 @@ export interface ModelIdentity {
   trained_on_shots?: number; seasons?: string[]; brier?: number; auc?: number;
   trained_at?: string; model_version?: number; dataset_version?: string;
 }
-export interface CalibrationBucket { bucket: string; predicted: number; actual: number; shots: number; lo?: number; hi?: number }
-export interface ModelUnavailable { available: false; reason: string }
-export interface ModelAvailable {
-  available: true; model_version: number; n_shots: number; seasons: string[];
-  trained_at: string; dataset_version?: string;
-  metrics: { brier: NullableNumber; brier_naive: NullableNumber; auc: NullableNumber; n_test: number | null; log_loss?: NullableNumber; average_precision?: NullableNumber; ece?: NullableNumber };
-  baseline?: { brier: number; auc: number };
-  calibration_by_distance: CalibrationBucket[]; calibration_by_time: CalibrationBucket[];
-  delta_distribution: number[]; feature_count: number;
-  selected_model?: string;
-  feature_importance?: Array<{ feature: string; importance: number }>;
-  drift?: Array<{ feature: string; psi: number; status: string }>;
-  confidence_intervals_95?: Record<string, { lower: number; upper: number }>;
-  dataset: { available: boolean; size_bytes: number; url: string; usage_note?: string };
-  evaluation?: Record<string, JsonValue>;
-}
-export type ModelInfo = ModelAvailable | ModelUnavailable;
+
+// Model-info types are derived directly from the OpenAPI contract
+// (backend/app/schemas.py -> src/lib/schema.d.ts via `npm run generate:api`)
+// so the frontend can never drift from the server's response shape.
+export type ModelInfoAvailable = components["schemas"]["ModelInfoAvailable"];
+export type ModelInfoUnavailable = components["schemas"]["ModelInfoUnavailable"];
+export type CalibrationBucket = components["schemas"]["CalibrationPoint"];
+// Kept aliases for existing consumers; now backed by the generated contract.
+export type ModelAvailable = ModelInfoAvailable;
+export type ModelUnavailable = ModelInfoUnavailable;
+export type ModelInfo = ModelInfoAvailable | ModelInfoUnavailable;
 
 export interface ListedGameTeam { team_id: number; abbr: string; name: string; pts: number; wl: string }
 export interface ListedGame { game_id: string; date: string; home: ListedGameTeam; away: ListedGameTeam }

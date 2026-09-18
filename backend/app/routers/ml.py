@@ -27,6 +27,7 @@ def model_info():
     return {
         "available": True,
         "model_version": meta.get("model_version", 1),
+        "dataset_version": meta.get("dataset_version"),
         "n_shots": meta.get("n_shots"),
         "seasons": meta.get("seasons", []),
         "trained_at": meta.get("trained_at"),

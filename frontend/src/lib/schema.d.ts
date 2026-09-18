@@ -448,6 +448,62 @@ export interface components {
             /** Question */
             question: string;
         };
+        /**
+         * CalibrationPoint
+         * @description One row of a predicted-vs-actual calibration table.
+         */
+        CalibrationPoint: {
+            /** Actual */
+            actual: number;
+            /** Bucket */
+            bucket: string;
+            /** Predicted */
+            predicted: number;
+            /** Shots */
+            shots: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DatasetInfo */
+        DatasetInfo: {
+            /** Available */
+            available: boolean;
+            /**
+             * Size Bytes
+             * @default 0
+             */
+            size_bytes: number;
+            /** Url */
+            url: string;
+            /** Usage Note */
+            usage_note: string;
+        };
+        /** DriftEntry */
+        DriftEntry: {
+            /** Feature */
+            feature: string;
+            /** Psi */
+            psi: number;
+            /** Status */
+            status: string;
+        };
+        /** FeatureImportance */
+        FeatureImportance: {
+            /** Feature */
+            feature: string;
+            /** Importance */
+            importance: number;
+        };
+        /**
+         * Interval
+         * @description A 95% bootstrap confidence interval.
+         */
+        Interval: {
+            /** Lower */
+            lower: number;
+            /** Upper */
+            upper: number;
+        };
         /** JsonObject */
         JsonObject: {
             [key: string]: components["schemas"]["JsonValue"];
@@ -462,6 +518,101 @@ export interface components {
          * @enum {string}
          */
         Location: "home" | "away";
+        /**
+         * ModelInfoAvailable
+         * @description Full metadata for a loaded xFG model, consumed by the "The Model" page.
+         */
+        ModelInfoAvailable: {
+            /**
+             * Available
+             * @description True when a model bundle is loaded.
+             * @default true
+             * @constant
+             */
+            available: true;
+            /** Baseline */
+            baseline?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            } | null;
+            /** Calibration By Distance */
+            calibration_by_distance?: components["schemas"]["CalibrationPoint"][];
+            /** Calibration By Time */
+            calibration_by_time?: components["schemas"]["CalibrationPoint"][];
+            /** Confidence Intervals 95 */
+            confidence_intervals_95?: {
+                [key: string]: components["schemas"]["Interval"];
+            };
+            dataset: components["schemas"]["DatasetInfo"];
+            /** Dataset Version */
+            dataset_version?: string | null;
+            /** Delta Distribution */
+            delta_distribution?: number[];
+            /** Drift */
+            drift?: components["schemas"]["DriftEntry"][];
+            /** Evaluation */
+            evaluation?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /**
+             * Feature Count
+             * @default 0
+             */
+            feature_count: number;
+            /** Feature Importance */
+            feature_importance?: components["schemas"]["FeatureImportance"][];
+            metrics?: components["schemas"]["ModelMetrics"];
+            /**
+             * Model Version
+             * @default 1
+             */
+            model_version: number;
+            /** N Shots */
+            n_shots?: number | null;
+            /** Seasons */
+            seasons?: string[];
+            /** Selected Model */
+            selected_model?: string | null;
+            /** Trained At */
+            trained_at?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ModelInfoUnavailable
+         * @description Returned when no model bundle is loaded yet.
+         */
+        ModelInfoUnavailable: {
+            /**
+             * Available
+             * @default false
+             * @constant
+             */
+            available: false;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * ModelMetrics
+         * @description Held-out classification metrics for the calibrated model.
+         */
+        ModelMetrics: {
+            /** Auc */
+            auc?: number | null;
+            /** Average Precision */
+            average_precision?: number | null;
+            /** Brier */
+            brier?: number | null;
+            /** Brier Naive */
+            brier_naive?: number | null;
+            /** Ece */
+            ece?: number | null;
+            /** Log Loss */
+            log_loss?: number | null;
+            /** N Test */
+            n_test?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * Outcome
          * @enum {string}
@@ -1466,7 +1617,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JsonObject"];
+                    "application/json": components["schemas"]["ModelInfoAvailable"] | components["schemas"]["ModelInfoUnavailable"];
                 };
             };
             /** @description Not Found */

@@ -31,7 +31,7 @@ export default function ModelExplainer() {
 
   const nShots = info.n_shots?.toLocaleString() ?? "hundreds of thousands of";
   const seasons = (info.seasons ?? []).join(", ");
-  const m = info.metrics;
+  const m = info.metrics ?? {};
   const base = info.baseline;
   const sizeMb = info.dataset?.size_bytes
     ? Math.round(info.dataset.size_bytes / 1024 / 1024)

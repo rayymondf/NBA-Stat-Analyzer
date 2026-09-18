@@ -139,6 +139,25 @@
         "title": "FeatureImportance",
         "type": "object"
       },
+      "Interval": {
+        "description": "A 95% bootstrap confidence interval.",
+        "properties": {
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "upper": {
+            "title": "Upper",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lower",
+          "upper"
+        ],
+        "title": "Interval",
+        "type": "object"
+      },
       "JsonObject": {
         "additionalProperties": {
           "$ref": "#/components/schemas/JsonValue"
@@ -170,6 +189,7 @@
         "description": "Full metadata for a loaded xFG model, consumed by the \"The Model\" page.",
         "properties": {
           "available": {
+            "const": true,
             "default": true,
             "description": "True when a model bundle is loaded.",
             "title": "Available",
@@ -205,13 +225,24 @@
           },
           "confidence_intervals_95": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
+              "$ref": "#/components/schemas/Interval"
             },
             "title": "Confidence Intervals 95",
             "type": "object"
           },
           "dataset": {
             "$ref": "#/components/schemas/DatasetInfo"
+          },
+          "dataset_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Version"
           },
           "delta_distribution": {
             "items": {
@@ -305,6 +336,7 @@
         "description": "Returned when no model bundle is loaded yet.",
         "properties": {
           "available": {
+            "const": false,
             "default": false,
             "title": "Available",
             "type": "boolean"
