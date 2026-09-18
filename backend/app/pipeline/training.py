@@ -815,18 +815,108 @@ def promote_candidate(
     return sha256_file(production)
 
 
-def log_mlflow(result: TrainingResult, *, experiment: str = "nba-xfg") -> bool:
-    """Record the run when the optional MLflow extra is installed."""
+def _mlflow_metric_key(prefix: str, name: str) -> str:
+    """Build an MLflow-safe metric key (alphanumerics, underscore, dash, dot, slash)."""
+    return f"{prefix}{name}".replace(" ", "_")
+
+
+def log_mlflow(
+    result: TrainingResult,
+    *,
+    experiment: str = "nba-xfg",
+    register: bool = True,
+    registered_model_name: str = "xfg",
+) -> bool:
+    """Record a browsable, file-backed MLflow run for the training result.
+
+    Logs run parameters, per-candidate tuning metrics, final test metrics,
+    baseline comparison, and clustered-bootstrap interval widths; attaches the
+    evaluation report, calibration, drift, and slice artifacts; and, when the
+    recorded promotion gate passes, registers the candidate in the local model
+    registry tagged with its dataset and model version. Returns False when the
+    optional MLflow extra is not installed so callers stay dependency-light.
+    """
     try:
         import mlflow
     except ImportError:
         return False
+
+    evaluation = result.evaluation
+    meta = result.bundle.get("meta", {})
     mlflow.set_experiment(experiment)
-    with mlflow.start_run():
-        mlflow.log_params({
-            "winner": result.evaluation["winner"],
-            "dataset_version": result.evaluation["dataset_version"],
+    with mlflow.start_run() as run:
+        mlflow.set_tags({
+            "model_version": meta.get("model_version"),
+            "dataset_version": evaluation.get("dataset_version"),
+            "winner": evaluation.get("winner"),
+            "baseline_kind": evaluation.get("baseline_kind"),
+            "promotion_gate": "passed" if result.promoted else "failed",
+            "schema_version": evaluation.get("schema_version"),
         })
-        mlflow.log_metrics(result.evaluation["test"])
-        mlflow.log_dict(result.evaluation, "evaluation.json")
+        mlflow.log_params({
+            "winner": evaluation.get("winner"),
+            "dataset_version": evaluation.get("dataset_version"),
+            "seasons": ",".join(meta.get("seasons", [])),
+            "n_shots": meta.get("n_shots"),
+            "n_test": meta.get("n_test"),
+            "train_through": evaluation.get("split", {}).get("train_through"),
+            "test_from": evaluation.get("split", {}).get("test_from"),
+            "baseline_kind": evaluation.get("baseline_kind"),
+        })
+
+        # Final calibrated test metrics.
+        mlflow.log_metrics(evaluation["test"])
+        # Baseline comparison, so a reviewer sees candidate-vs-baseline in one place.
+        mlflow.log_metrics({
+            _mlflow_metric_key("baseline_", key): value
+            for key, value in evaluation.get("baseline", {}).items()
+        })
+        # Per-candidate tuning metrics selected on during model choice.
+        for candidate in evaluation.get("candidates", []):
+            name = candidate["name"]
+            mlflow.log_metrics({
+                _mlflow_metric_key(f"tuning_{name}_", key): value
+                for key, value in candidate.get("validation", {}).items()
+            })
+        # Clustered-bootstrap 95% interval widths quantify test uncertainty.
+        for metric, interval in evaluation.get("confidence_intervals_95", {}).items():
+            width = float(interval["upper"]) - float(interval["lower"])
+            mlflow.log_metric(_mlflow_metric_key("ci95_width_", metric), width)
+
+        # Rich artifacts for offline inspection.
+        mlflow.log_dict(evaluation, "evaluation.json")
+        mlflow.log_dict({"calibration": evaluation.get("calibration", [])}, "calibration.json")
+        mlflow.log_dict({"drift": evaluation.get("drift", [])}, "drift.json")
+        mlflow.log_dict({"slices": evaluation.get("slices", [])}, "slices.json")
+        mlflow.log_dict(evaluation.get("promotion", {}), "promotion.json")
+
+        # Register only a gate-passing candidate; a failed gate is still logged
+        # for history but never promoted into the registry.
+        if register and result.promoted:
+            try:
+                model = result.bundle.get("model")
+                if model is not None:
+                    # Log a real sklearn MLmodel so the registry version can reach
+                    # READY on the local file store, then register that artifact.
+                    import mlflow.sklearn
+
+                    mlflow.sklearn.log_model(
+                        model,
+                        name="model",
+                        registered_model_name=registered_model_name,
+                    )
+                    latest = mlflow.tracking.MlflowClient().search_model_versions(
+                        f"name='{registered_model_name}'"
+                    )
+                    if latest:
+                        newest = max(latest, key=lambda version: int(version.version))
+                        mlflow.tracking.MlflowClient().set_tag(
+                            run.info.run_id,
+                            "registered_model_version",
+                            str(newest.version),
+                        )
+            except Exception as error:
+                mlflow.tracking.MlflowClient().set_tag(
+                    run.info.run_id, "registry_error", type(error).__name__
+                )
     return True

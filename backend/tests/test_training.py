@@ -10,6 +10,7 @@ import pytest
 from app.pipeline.training import (
     classification_metrics,
     cluster_bootstrap_intervals,
+    log_mlflow,
     promote_candidate,
     save_candidate,
     temporal_split,
@@ -134,3 +135,71 @@ def test_xfg_v3_training_evaluation_and_gated_promotion(tmp_path: Path, monkeypa
         promote_candidate(candidate, tmp_path / "production.joblib")
     checksum = promote_candidate(candidate, tmp_path / "production.joblib", force=True)
     assert len(checksum) == 64
+
+
+
+def test_log_mlflow_records_run_metrics_and_registers_on_gate_pass(tmp_path, monkeypatch):
+    mlflow = pytest.importorskip("mlflow")
+    monkeypatch.setattr("app.services.ml._team_abbr", lambda: {1610612761: "TOR"})
+    # Isolate tracking + registry to a temp file store so the test is hermetic.
+    tracking_uri = (tmp_path / "mlruns").as_uri()
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_registry_uri(tracking_uri)
+
+    result = train_xfg(
+        _training_data(),
+        dataset_version="shots-v1-fixture",
+        bootstrap_iterations=20,
+    )
+    # Force the gate outcome so we deterministically exercise registration.
+    result.promoted = True
+
+    logged = log_mlflow(result, experiment="nba-xfg-test", registered_model_name="xfg-test")
+    assert logged is True
+
+    client = mlflow.tracking.MlflowClient(tracking_uri=tracking_uri, registry_uri=tracking_uri)
+    experiment = client.get_experiment_by_name("nba-xfg-test")
+    assert experiment is not None
+    runs = client.search_runs([experiment.experiment_id])
+    assert len(runs) == 1
+    run = runs[0]
+
+    # Params and tags captured the run identity.
+    assert run.data.params["dataset_version"] == "shots-v1-fixture"
+    assert run.data.tags["model_version"] == "3"
+    assert run.data.tags["promotion_gate"] == "passed"
+
+    # Final test metrics plus per-candidate tuning metrics were logged.
+    assert "brier" in run.data.metrics
+    assert any(key.startswith("tuning_") for key in run.data.metrics)
+    assert any(key.startswith("baseline_") for key in run.data.metrics)
+
+    # Artifacts for offline inspection were attached.
+    artifacts = {item.path for item in client.list_artifacts(run.info.run_id)}
+    assert {"evaluation.json", "calibration.json", "drift.json", "promotion.json"} <= artifacts
+
+    # A gate-passing candidate was registered in the local model registry.
+    registered = {model.name for model in client.search_registered_models()}
+    assert "xfg-test" in registered
+    assert run.data.tags.get("registered_model_version") is not None
+
+
+def test_log_mlflow_skips_registration_when_gate_fails(tmp_path, monkeypatch):
+    mlflow = pytest.importorskip("mlflow")
+    monkeypatch.setattr("app.services.ml._team_abbr", lambda: {1610612761: "TOR"})
+    tracking_uri = (tmp_path / "mlruns").as_uri()
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_registry_uri(tracking_uri)
+
+    result = train_xfg(
+        _training_data(),
+        dataset_version="shots-v1-fixture",
+        bootstrap_iterations=20,
+    )
+    result.promoted = False
+
+    assert log_mlflow(result, experiment="nba-xfg-fail", registered_model_name="xfg-fail") is True
+    client = mlflow.tracking.MlflowClient(tracking_uri=tracking_uri, registry_uri=tracking_uri)
+    # Run is recorded for history, but nothing is registered when the gate fails.
+    registered = {model.name for model in client.search_registered_models()}
+    assert "xfg-fail" not in registered
