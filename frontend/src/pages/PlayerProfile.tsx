@@ -1,18 +1,19 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { num, pct, teamLogo } from "../lib/format";
-import { HowItsMade, Skeleton } from "../components/ui";
+import { ErrorState, HowItsMade, Skeleton } from "../components/ui";
 import FilterBar, { type ProfileFilters } from "../components/profile/FilterBar";
 import OverviewSection from "../components/profile/OverviewSection";
-import ShootingSection from "../components/profile/ShootingSection";
-import EfficiencySection from "../components/profile/EfficiencySection";
-import PlaytimeSection from "../components/profile/PlaytimeSection";
-import FoulsSection from "../components/profile/FoulsSection";
-import GameLogSection from "../components/profile/GameLogSection";
-import TrendsSection from "../components/profile/TrendsSection";
-import ImpactSection from "../components/profile/ImpactSection";
+
+const ShootingSection = lazy(() => import("../components/profile/ShootingSection"));
+const EfficiencySection = lazy(() => import("../components/profile/EfficiencySection"));
+const PlaytimeSection = lazy(() => import("../components/profile/PlaytimeSection"));
+const FoulsSection = lazy(() => import("../components/profile/FoulsSection"));
+const GameLogSection = lazy(() => import("../components/profile/GameLogSection"));
+const TrendsSection = lazy(() => import("../components/profile/TrendsSection"));
+const ImpactSection = lazy(() => import("../components/profile/ImpactSection"));
 
 const SECTIONS = [
   { id: "overview", label: "Overview" },
@@ -43,17 +44,24 @@ export default function PlayerProfile() {
   const [filters, setFilters] = useState<ProfileFilters>({ perMode: "per_game" });
 
   const { data: meta } = useQuery({ queryKey: ["meta"], queryFn: api.meta });
-  const season = filters.season ?? meta?.current_season;
-  const effFilters = { ...filters, season };
 
-  const { data: summary, isLoading } = useQuery({
-    queryKey: ["summary", playerId, season, filters.season_type],
-    queryFn: () => api.summary(playerId, { season, season_type: filters.season_type }),
-    enabled: !!season,
+  const { data: summary, isLoading, error, refetch } = useQuery({
+    queryKey: ["summary", playerId, filters.season, filters.season_type],
+    queryFn: () => api.summary(playerId, {
+      season: filters.season,
+      season_type: filters.season_type,
+    }),
+    enabled: Number.isInteger(playerId) && playerId > 0,
   });
+  const season = filters.season ?? summary?.season ?? meta?.current_season;
+  const effFilters = { ...filters, season };
 
   const pg = summary?.stats?.per_game ?? {};
   const sh = summary?.stats?.shooting ?? {};
+
+  if (error && !summary) {
+    return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
+  }
 
   return (
     <div>
@@ -78,7 +86,7 @@ export default function PlayerProfile() {
             <div className="flex flex-wrap gap-5 items-center">
               <img
                 src={summary.headshot}
-                alt={summary.name}
+                alt={summary.name ?? "NBA player"}
                 className="w-24 h-24 rounded-full object-cover bg-surface-2 border-2 border-edge"
                 onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
               />
@@ -116,7 +124,7 @@ export default function PlayerProfile() {
           )}
           {summary && (
             <div className="mt-4 pt-4 border-t border-edge flex gap-2 flex-wrap">
-              {AI_CHIPS(summary.name, season).map((c) => (
+              {AI_CHIPS(summary.name ?? "this player", season).map((c) => (
                 <button
                   key={c.q}
                   onClick={() =>
@@ -169,7 +177,7 @@ export default function PlayerProfile() {
 
       {/* ---- Active section ---- */}
       {season && (
-        <>
+        <Suspense fallback={<Skeleton className="h-72 rounded-lg" />}>
           {section === "overview" && <OverviewSection playerId={playerId} filters={effFilters} />}
           {section === "shooting" && <ShootingSection playerId={playerId} filters={effFilters} />}
           {section === "efficiency" && <EfficiencySection playerId={playerId} filters={effFilters} />}
@@ -178,7 +186,7 @@ export default function PlayerProfile() {
           {section === "gamelog" && <GameLogSection playerId={playerId} filters={effFilters} />}
           {section === "trends" && <TrendsSection playerId={playerId} filters={effFilters} />}
           {section === "impact" && <ImpactSection playerId={playerId} filters={effFilters} />}
-        </>
+        </Suspense>
       )}
       <HowItsMade>
         Player data comes live from NBA.com's official stats through the free

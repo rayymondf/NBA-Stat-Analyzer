@@ -3,22 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
-export function useSearchPalette() {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setOpen((o) => !o);
-      }
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-  return { open, setOpen };
-}
-
 export default function SearchPalette({
   open, onClose, onPick,
 }: {
@@ -27,26 +11,64 @@ export default function SearchPalette({
   onPick?: (playerId: number, name: string) => void;
 }) {
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef<HTMLElement | null>(null);
   const navigate = useNavigate();
 
-  const { data: results = [], isFetching } = useQuery({
-    queryKey: ["search", q],
-    queryFn: () => api.search(q),
-    enabled: open && q.trim().length >= 2,
-    placeholderData: (prev) => prev,
+  const { data: results = [], isFetching, error } = useQuery({
+    queryKey: ["search", debouncedQ],
+    queryFn: ({ signal }) => api.search(debouncedQ, signal),
+    enabled: open && debouncedQ.length >= 2,
   });
+  const visibleResults = q.trim() === debouncedQ ? results : [];
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQ(q.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [q]);
 
   useEffect(() => {
     if (open) {
+      previousFocus.current = document.activeElement as HTMLElement | null;
       setQ("");
+      setDebouncedQ("");
       setActive(0);
-      setTimeout(() => inputRef.current?.focus(), 30);
+      window.setTimeout(() => inputRef.current?.focus(), 30);
+    } else {
+      previousFocus.current?.focus();
     }
   }, [open]);
 
-  useEffect(() => setActive(0), [results.length]);
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === "Tab" && panelRef.current) {
+        const focusable = Array.from(
+          panelRef.current.querySelectorAll<HTMLElement>("input, button, [tabindex]:not([tabindex='-1'])"),
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  useEffect(() => setActive(0), [visibleResults.length]);
 
   if (!open) return null;
 
@@ -58,69 +80,94 @@ export default function SearchPalette({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search NBA players"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[14vh] bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
+        ref={panelRef}
         className="w-full max-w-xl card shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-4 border-b border-edge">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-ink-muted shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-ink-muted shrink-0" aria-hidden="true">
             <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
             <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
           <input
             ref={inputRef}
             value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowDown") setActive((a) => Math.min(a + 1, results.length - 1));
-              if (e.key === "ArrowUp") setActive((a) => Math.max(a - 1, 0));
-              if (e.key === "Enter" && results[active]) pick(results[active].player_id, results[active].name);
+            onChange={(event) => setQ(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" && visibleResults.length) {
+                event.preventDefault();
+                setActive((value) => Math.min(value + 1, visibleResults.length - 1));
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setActive((value) => Math.max(value - 1, 0));
+              }
+              const selected = visibleResults[active];
+              if (event.key === "Enter" && selected) pick(selected.player_id, selected.name);
             }}
             placeholder="Search NBA players…"
+            role="combobox"
+            aria-label="Player name"
+            aria-controls="player-search-results"
+            aria-expanded={visibleResults.length > 0}
+            aria-activedescendant={visibleResults[active] ? `player-option-${visibleResults[active].player_id}` : undefined}
+            aria-busy={isFetching}
             className="flex-1 bg-transparent py-3.5 text-sm outline-none placeholder:text-ink-muted"
           />
           <kbd className="text-[10px] text-ink-muted border border-edge rounded px-1.5 py-0.5">ESC</kbd>
         </div>
-        <div className="max-h-80 overflow-y-auto">
+        <div id="player-search-results" role="listbox" className="max-h-80 overflow-y-auto">
           {q.trim().length < 2 && (
-            <p className="p-4 text-sm text-ink-muted">Type at least two letters. Try "Wembanyama" or "Curry".</p>
+            <p className="p-4 text-sm text-ink-muted">Type at least two letters. Try “Wembanyama” or “Curry”.</p>
           )}
-          {q.trim().length >= 2 && !isFetching && results.length === 0 && (
-            <p className="p-4 text-sm text-ink-muted">No players found for "{q}".</p>
+          {q.trim().length >= 2 && q.trim() !== debouncedQ && (
+            <p className="p-4 text-sm text-ink-muted">Waiting for you to finish typing…</p>
           )}
-          {results.map((r, i) => (
+          {isFetching && <p className="p-4 text-sm text-ink-muted">Searching…</p>}
+          {error && <p role="alert" className="p-4 text-sm text-[var(--critical)]">{(error as Error).message}</p>}
+          {debouncedQ.length >= 2 && !isFetching && !error && visibleResults.length === 0 && (
+            <p className="p-4 text-sm text-ink-muted">No players found for “{debouncedQ}”.</p>
+          )}
+          {visibleResults.map((result, index) => (
             <button
-              key={r.player_id}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => pick(r.player_id, r.name)}
+              id={`player-option-${result.player_id}`}
+              role="option"
+              aria-selected={index === active}
+              key={result.player_id}
+              onMouseEnter={() => setActive(index)}
+              onClick={() => pick(result.player_id, result.name)}
               className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                i === active ? "bg-surface-2" : ""
+                index === active ? "bg-surface-2" : ""
               }`}
             >
               <img
-                src={r.headshot}
+                src={result.headshot}
                 alt=""
                 loading="lazy"
                 className="w-9 h-9 rounded-full object-cover bg-surface-2"
-                onError={(e) => ((e.target as HTMLImageElement).style.visibility = "hidden")}
+                onError={(event) => ((event.target as HTMLImageElement).style.visibility = "hidden")}
               />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{r.name}</div>
+                <div className="text-sm font-medium truncate">{result.name}</div>
                 <div className="text-xs text-ink-muted">
-                  {r.team ?? "Free agent"} · {r.position ?? "–"}{r.jersey ? ` · #${r.jersey}` : ""}
+                  {result.team ?? "Free agent"} · {result.position ?? "–"}{result.jersey ? ` · #${result.jersey}` : ""}
                 </div>
-                {!r.has_season_stats && (
+                {!result.has_season_stats && (
                   <div className="text-[11px]" style={{ color: "var(--warning)" }}>
-                    Current roster · no {r.lookup_season} appearances
+                    Current roster · no {result.lookup_season} appearances
                   </div>
                 )}
               </div>
-              {r.ppg != null && (
+              {result.ppg != null && (
                 <div className="text-xs tnum text-ink-muted shrink-0">
-                  {r.ppg} pts · {r.rpg} reb · {r.apg} ast
+                  {result.ppg} pts · {result.rpg} reb · {result.apg} ast
                 </div>
               )}
             </button>

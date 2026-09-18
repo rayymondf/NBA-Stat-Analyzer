@@ -22,7 +22,7 @@ export default function ShootingSection({ playerId, filters }: {
     }),
   });
 
-  const { data: quality } = useQuery({
+  const { data: quality, isLoading: qualityLoading, error: qualityError } = useQuery({
     queryKey: ["shotQuality", playerId, filters.season, filters.season_type],
     queryFn: () => api.shotQuality(playerId, {
       season: filters.season,
@@ -43,16 +43,20 @@ export default function ShootingSection({ playerId, filters }: {
 
   const t = data.totals ?? {};
   const sb = data.scoring_breakdown ?? {};
+  const fga = t.fga ?? 0;
+  const fgm = t.fgm ?? 0;
+  const fg3a = t.fg3a ?? 0;
+  const fg3m = t.fg3m ?? 0;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatTile label="FG" value={pct(t.fg_pct)} sub={`${t.fgm}/${t.fga}`} />
-        <StatTile label="3PT" value={t.fg3a ? pct(t.fg3m / t.fg3a) : "–"} sub={`${t.fg3m}/${t.fg3a}`} />
-        <StatTile label="2PT" value={t.fga - t.fg3a ? pct((t.fgm - t.fg3m) / (t.fga - t.fg3a)) : "–"} sub={`${t.fgm - t.fg3m}/${t.fga - t.fg3a}`} />
+        <StatTile label="FG" value={pct(t.fg_pct)} sub={`${fgm}/${fga}`} />
+        <StatTile label="3PT" value={fg3a ? pct(fg3m / fg3a) : "–"} sub={`${fg3m}/${fg3a}`} />
+        <StatTile label="2PT" value={fga - fg3a ? pct((fgm - fg3m) / (fga - fg3a)) : "–"} sub={`${fgm - fg3m}/${fga - fg3a}`} />
         <StatTile label="Pts / shot" value={num(t.pts_per_shot, 2)} tip="PTS_PER_SHOT" />
         <StatTile label="Avg distance" value={`${num(t.avg_distance)} ft`} />
-        <StatTile label="Attempts" value={t.fga} sub="field goals" />
+        <StatTile label="Attempts" value={fga} sub="field goals" />
       </div>
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-4">
@@ -70,7 +74,7 @@ export default function ShootingSection({ playerId, filters }: {
             <select
               className="bg-surface border border-edge rounded-lg px-2.5 py-1.5 text-xs outline-none"
               value={result}
-              onChange={(e) => setResult(e.target.value as any)}
+              onChange={(e) => setResult(e.target.value as "all" | "made" | "missed")}
             >
               <option value="all">Makes + misses</option>
               <option value="made">Makes only</option>
@@ -85,7 +89,7 @@ export default function ShootingSection({ playerId, filters }: {
           <Card>
             <CardTitle>Shooting by distance</CardTitle>
             <div className="space-y-2">
-              {(data.by_distance ?? []).map((d: any) => (
+              {(data.by_distance ?? []).map((d) => (
                 <div key={d.range} className="text-xs">
                   <div className="flex justify-between mb-1">
                     <span className="text-ink-2">{d.range}</span>
@@ -100,6 +104,11 @@ export default function ShootingSection({ playerId, filters }: {
             </div>
           </Card>
 
+          {qualityLoading && <SkeletonCard lines={3} />}
+          {qualityError && <ErrorState message={(qualityError as Error).message} />}
+          {quality && !quality.available && (
+            <Card><p className="text-xs text-ink-muted">Shot-quality model unavailable: {quality.reason}</p></Card>
+          )}
           {quality?.available && (
             <Card>
               <CardTitle tip="XFG">Shot quality (ML)</CardTitle>
@@ -130,8 +139,13 @@ export default function ShootingSection({ playerId, filters }: {
                   qualified NBA players.
                 </p>
               )}
+              {quality.confidence_interval_95 && (
+                <p className="text-xs text-ink-2 mb-2">
+                  95% interval: {(quality.confidence_interval_95[0] * 100).toFixed(1)} to {(quality.confidence_interval_95[1] * 100).toFixed(1)} percentage points.
+                </p>
+              )}
               <div className="space-y-1 text-xs">
-                {(quality.zones ?? []).map((z: any) => (
+                {(quality.zones ?? []).map((z) => (
                   <div key={z.zone} className="flex justify-between">
                     <span className="text-ink-2">{z.zone}</span>
                     <span className="tnum">
@@ -147,6 +161,7 @@ export default function ShootingSection({ playerId, filters }: {
                 Model estimate trained on {quality.model?.trained_on_shots?.toLocaleString()} real
                 NBA shots, from shot locations and types only, never video.
               </p>
+              {quality.uncertainty_note && <p className="text-[10px] text-ink-muted mt-1">{quality.uncertainty_note}</p>}
               <Link
                 to={`/model?player=${playerId}`}
                 className="inline-block text-[11px] mt-2 font-medium underline underline-offset-2 hover:text-ink transition-colors"

@@ -24,7 +24,7 @@ export default function GamesPage() {
 
   // One cached backend call returns the whole season schedule; filter + page
   // entirely client-side (no extra API requests when the user changes filters).
-  const { data: games, isLoading } = useQuery({
+  const { data: games, isLoading, error, refetch } = useQuery({
     queryKey: ["games", activeSeason, seasonType, team],
     queryFn: () =>
       api.games({
@@ -112,10 +112,13 @@ export default function GamesPage() {
         </div>
 
         <div className="max-h-[62vh] overflow-y-auto">
+          {error && (
+            <div className="p-3"><ErrorState message={(error as Error).message} onRetry={() => void refetch()} /></div>
+          )}
           {isLoading && Array.from({ length: 8 }).map((_, i) => (
             <div key={i} className="p-3 border-b border-edge"><Skeleton className="h-9" /></div>
           ))}
-          {!isLoading && filtered.length === 0 && (
+          {!isLoading && !error && filtered.length === 0 && (
             <p className="p-4 text-xs text-ink-muted">No games match these filters.</p>
           )}
           {shown.map((g) => (
@@ -188,7 +191,7 @@ function Investigation({ gameId }: { gameId: string }) {
   if (error) return <ErrorState message={(error as Error).message} />;
   if (!data) return null;
 
-  const maxScore = Math.max(0.01, ...data.explanations.map((e: any) => e.score));
+  const maxScore = Math.max(0.01, ...data.explanations.map((explanation) => explanation.score));
 
   return (
     <div className="space-y-4">
@@ -197,7 +200,7 @@ function Investigation({ gameId }: { gameId: string }) {
         <button
           onClick={() => navigate("/ai", {
             state: {
-              question: `Why did ${data.teams.find((t: any) => !t.winner)?.name} lose this game?`,
+              question: `Why did ${data.teams.find((teamRow) => !teamRow.winner)?.name} lose this game?`,
               context: { game_id: gameId },
             },
           })}
@@ -210,7 +213,7 @@ function Investigation({ gameId }: { gameId: string }) {
       <Card>
         <CardTitle>Why it happened, strongest explanations first</CardTitle>
         <div className="space-y-3">
-          {data.explanations.map((e: any) => (
+          {data.explanations.map((e) => (
             <div key={e.key} className="border border-edge rounded-lg p-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium">{e.title}</span>
@@ -224,7 +227,7 @@ function Investigation({ gameId }: { gameId: string }) {
               <p className="text-xs text-ink-2 mt-1.5">{e.summary}</p>
               {e.evidence_for?.length > 0 && (
                 <div className="mt-2 grid sm:grid-cols-2 gap-x-4 gap-y-0.5">
-                  {e.evidence_for.map((ev: any, i: number) => (
+                  {e.evidence_for.map((ev, i) => (
                     <div key={i} className="text-[11px] text-ink-muted flex justify-between gap-2">
                       <span>{ev.label}</span><span className="tnum text-ink-2">{String(ev.value)}</span>
                     </div>
@@ -233,7 +236,7 @@ function Investigation({ gameId }: { gameId: string }) {
               )}
               {e.evidence_against?.length > 0 && (
                 <div className="mt-1.5">
-                  {e.evidence_against.map((ev: any, i: number) => (
+                  {e.evidence_against.map((ev, i) => (
                     <div key={i} className="text-[11px] flex gap-1.5 items-center" style={{ color: "var(--serious)" }}>
                       <span>⚠</span><span>{ev.label}: {String(ev.value)}</span>
                     </div>
@@ -263,7 +266,7 @@ function Investigation({ gameId }: { gameId: string }) {
               </tr>
             </thead>
             <tbody>
-              {Object.entries(data.four_factors).map(([abbr, ff]: [string, any]) => (
+              {Object.entries(data.four_factors).map(([abbr, ff]) => (
                 <tr key={abbr} className="border-t border-edge">
                   <td className="py-1.5 font-medium">{abbr}</td>
                   <td className="text-right">{pct(ff.efg)}</td>
@@ -278,7 +281,7 @@ function Investigation({ gameId }: { gameId: string }) {
         <Card>
           <CardTitle>Star lines vs season average</CardTitle>
           <div className="space-y-1">
-            {data.star_lines.map((l: any) => (
+            {data.star_lines.map((l) => (
               <div key={`${l.player_id}`} className="text-xs flex items-center gap-2">
                 <span className="w-10 text-ink-muted">{l.team}</span>
                 <span className="flex-1 truncate">{l.name}</span>

@@ -38,7 +38,7 @@ export default function OverviewSection({ playerId, filters }: {
   const rates = stats[perMode] ?? stats.per_game;
   const sh = stats.shooting ?? {};
   const pcts = data.percentiles ?? {};
-  const posGroup = Object.values(pcts)[0] as any;
+  const posGroup = Object.values(pcts)[0];
   const poolNote = posGroup
     ? `vs ${POS_LABEL[posGroup.position_group] ?? "peers"} (${posGroup.pool_size} qualified)`
     : "";

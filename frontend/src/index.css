@@ -171,8 +171,9 @@ body {
   animation: rise 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .section-in,
-  .bar-fill {
-    animation: none;
-  }
+    .section-in,
+    .bar-fill,
+    .skeleton {
+      animation: none;
+    }
 }

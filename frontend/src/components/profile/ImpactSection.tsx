@@ -44,13 +44,13 @@ export default function ImpactSection({ playerId, filters }: {
             </tr>
           </thead>
           <tbody className="tnum">
-            {rows.map((r: any) => (
+            {rows.map((r) => (
               <tr key={r.season} className="border-t border-edge">
                 <td className="py-1.5">{r.season}</td>
                 <td className="text-right">{num(r.on_court?.min, 0)}</td>
                 <td className="text-right">{signed(r.on_court?.net_rating)}</td>
                 <td className="text-right">{signed(r.off_court?.net_rating)}</td>
-                <td className={`text-right font-semibold ${r.net_diff > 0 ? "text-delta-up" : "text-delta-down"}`}>
+                <td className={`text-right font-semibold ${(r.net_diff ?? 0) > 0 ? "text-delta-up" : "text-delta-down"}`}>
                   {signed(r.net_diff)}
                 </td>
               </tr>

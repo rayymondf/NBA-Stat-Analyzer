@@ -24,7 +24,7 @@ export default function PlaytimeSection({ playerId, filters }: {
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatTile label="Minutes / game" value={num(data.min_per_game)} />
-        <StatTile label="Total minutes" value={Math.round(data.min_total)} />
+        <StatTile label="Total minutes" value={Math.round(data.min_total ?? 0)} />
         <StatTile label="Games played" value={data.games} sub={data.team_games ? `of ${data.team_games} team games` : undefined} />
         <StatTile label="Games missed" value={data.games_missed ?? "–"} />
         <StatTile label="Starts" value={data.starts ?? "–"} sub={data.bench_games != null ? `${data.bench_games} off bench` : undefined} />
@@ -51,7 +51,7 @@ export default function PlaytimeSection({ playerId, filters }: {
               </tr>
             </thead>
             <tbody className="tnum">
-              {(data.by_minutes ?? []).map((b: any) => (
+              {(data.by_minutes ?? []).map((b) => (
                 <tr key={b.bucket} className="border-t border-edge">
                   <td className="py-1.5 text-ink-2">{b.bucket}</td>
                   <td className="text-right">{b.games}</td>

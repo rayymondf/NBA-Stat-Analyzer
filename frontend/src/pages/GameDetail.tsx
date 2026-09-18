@@ -84,7 +84,7 @@ export default function GameDetailPage() {
           <Card>
             <CardTitle>Scoring plays ({data.scoring_events?.length ?? 0})</CardTitle>
             <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
-              {(data.scoring_events ?? []).map((e: any, i: number) => (
+              {(data.scoring_events ?? []).map((e, i) => (
                 <div key={i} className="text-xs flex gap-2">
                   <span className="text-ink-muted tnum shrink-0 w-16">
                     Q{e.period} {String(e.clock).replace("PT", "").replace("M", ":").split(".")[0]}

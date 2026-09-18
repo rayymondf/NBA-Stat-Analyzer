@@ -38,8 +38,9 @@ export default function FoulsSection({ playerId, filters }: {
   if (error) return <ErrorState message={(error as Error).message} />;
   if (!data?.games) return <ErrorState message="No games for this selection." />;
 
-  const types = data.foul_types_recent?.counts ?? {};
-  const typeTotal = Object.values(types).reduce((a: number, b: any) => a + b, 0);
+  const types: Record<string, number> = data.foul_types_recent?.counts ?? {};
+  const typeTotal = Object.values(types).reduce((sum, count) => sum + count, 0);
+  const estimatedFta = data.foul_types_recent?.opponent_fta_from_shooting_fouls_estimate ?? 0;
 
   return (
     <div className="space-y-4">
@@ -78,9 +79,9 @@ export default function FoulsSection({ playerId, filters }: {
             </div>
           )}
           <p className="text-[11px] text-ink-muted mt-3">{data.note}</p>
-          {data.foul_types_recent?.opponent_fta_from_shooting_fouls_estimate > 0 && (
+          {estimatedFta > 0 && (
             <p className="text-[11px] text-ink-muted mt-1">
-              ≈{data.foul_types_recent.opponent_fta_from_shooting_fouls_estimate} opponent free throws
+              ≈{estimatedFta} opponent free throws
               from shooting fouls in those games (estimate).
             </p>
           )}
@@ -104,7 +105,7 @@ export default function FoulsSection({ playerId, filters }: {
           </div>
           <CardTitle>Fouls per game (season)</CardTitle>
           <div className="flex items-end gap-[2px] h-16">
-            {(data.series ?? []).map((s: any, i: number) => (
+            {(data.series ?? []).map((s, i) => (
               <div
                 key={i}
                 title={`${s.date}: ${s.pf} fouls`}

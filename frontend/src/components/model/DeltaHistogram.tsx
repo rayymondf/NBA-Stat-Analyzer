@@ -31,7 +31,7 @@ export default function DeltaHistogram({ distribution, playerDelta, playerName }
   }));
   for (const v of values) {
     const i = Math.min(binCount - 1, Math.max(0, Math.floor((v - lo) / width)));
-    bins[i].players += 1;
+    bins[i]!.players += 1;
   }
   const markerBin = playerDelta === null || playerDelta === undefined
     ? null
@@ -53,7 +53,7 @@ export default function DeltaHistogram({ distribution, playerDelta, playerName }
           <Tooltip
             content={<ChartTooltip formatter={(v: number) => `${v} players`} />}
             cursor={{ fill: "var(--surface-2)", opacity: 0.5 }}
-            labelFormatter={(l: any) => l}
+            labelFormatter={(label) => label}
           />
           <Bar dataKey="players" name="Players" fill="var(--series-1)" radius={[4, 4, 0, 0]} />
           {markerBin && (

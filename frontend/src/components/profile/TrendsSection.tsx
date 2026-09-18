@@ -78,7 +78,7 @@ export default function TrendsSection({ playerId, filters }: {
             data={data.series}
             height={190}
             series={[
-              ...(data.series.some((s: any) => s.usg_roll != null)
+              ...(data.series.some((point) => point.usg_roll != null)
                 ? [{ key: "usg_roll", name: "Usage (rolling)", color: "var(--series-7)" }]
                 : []),
               { key: "fg3a_rate_roll", name: "3PA rate (rolling)", color: "var(--series-1)" },

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { num } from "../lib/format";
-import { AnimatedNumber, HowItsMade, Skeleton } from "../components/ui";
+import { AnimatedNumber, ErrorState, HowItsMade, Skeleton } from "../components/ui";
 
 const AI_EXAMPLES = [
   "Who are the top five scorers in the NBA this season?",
@@ -13,7 +13,7 @@ const AI_EXAMPLES = [
 
 export default function Home({ onSearch }: { onSearch: () => void }) {
   const navigate = useNavigate();
-  const { data: leaders, isLoading } = useQuery({
+  const { data: leaders, isLoading, error, refetch } = useQuery({
     queryKey: ["leaders-home"],
     queryFn: () => api.leaders({ stat: "PTS", limit: 8 }),
   });
@@ -66,6 +66,9 @@ export default function Home({ onSearch }: { onSearch: () => void }) {
       <section className="mb-12">
         <div className="eyebrow mb-4">The leaderboard · points per game</div>
         <div className="grid sm:grid-cols-2 gap-x-10">
+          {error && (
+            <div className="sm:col-span-2"><ErrorState message={(error as Error).message} onRetry={() => void refetch()} /></div>
+          )}
           {isLoading &&
             Array.from({ length: 8 }).map((_, i) => (
               <Skeleton key={i} className="h-14 rounded-md mb-1" />

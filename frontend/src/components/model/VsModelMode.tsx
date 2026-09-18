@@ -2,12 +2,17 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type ShotPoint } from "../../lib/api";
+import type { ModelAvailable, ModelInfo } from "../../lib/types";
 import SearchPalette from "../SearchPalette";
 import ShotChart from "../ShotChart";
 import { AnimatedNumber, Card, CardTitle, ErrorState, GlossaryTip, Segmented, Skeleton } from "../ui";
 import DeltaHistogram from "./DeltaHistogram";
 import CalibrationChart from "./CalibrationChart";
 import ZoneDeltaBars from "./ZoneDeltaBars";
+
+function isModelAvailable(info: ModelInfo | undefined): info is ModelAvailable {
+  return info?.available === true;
+}
 
 /** The player's real shot chart with adjustable views and filters. */
 function ShotSelectionCard({ playerId, name }: { playerId: number; name?: string }) {
@@ -36,7 +41,7 @@ function ShotSelectionCard({ playerId, name }: { playerId: number; name?: string
             { value: "missed" as const, label: "Misses" },
           ]}
           value={result}
-          onChange={setResult}
+          onChange={(value) => setResult(value)}
         />
       </div>
       <ShotChart points={points} zones={data.zones ?? []} defaultView="dots" height={420} />
@@ -72,9 +77,10 @@ export default function VsModelMode() {
     queryFn: api.modelInfo,
     staleTime: 30 * 60 * 1000,
   });
+  const modelInfo = isModelAvailable(info) ? info : null;
 
   const bio = summary; // summary endpoint returns bio fields at the top level
-  const name: string | undefined = bio?.name;
+  const name = bio?.name ?? undefined;
 
   const pickPlayer = (id: number) => {
     const next = new URLSearchParams(params);
@@ -161,6 +167,13 @@ export default function VsModelMode() {
                   {quality.delta_per_100_shots > 0 ? "+" : ""}
                   {quality.delta_per_100_shots} points per 100 shots
                 </div>
+                {quality.confidence_interval_95 && (
+                  <div className="text-[11px] text-ink-muted mt-1">
+                    95% interval: {quality.confidence_interval_95[0] > 0 ? "+" : ""}
+                    {(quality.confidence_interval_95[0] * 100).toFixed(1)} to {quality.confidence_interval_95[1] > 0 ? "+" : ""}
+                    {(quality.confidence_interval_95[1] * 100).toFixed(1)} pts
+                  </div>
+                )}
               </div>
               <div className="text-xs text-ink-2 max-w-56 leading-relaxed">
                 {quality.percentile != null ? (
@@ -171,13 +184,18 @@ export default function VsModelMode() {
                 )}
               </div>
             </div>
+            {quality.uncertainty_note && (
+              <p className="text-[11px] text-ink-muted leading-relaxed mt-4 max-w-3xl">
+                {quality.uncertainty_note}
+              </p>
+            )}
           </Card>
 
           <div className="grid lg:grid-cols-2 gap-4">
             <Card className="section-in">
               <CardTitle>Where they land in the league</CardTitle>
               <DeltaHistogram
-                distribution={info?.delta_distribution ?? []}
+                distribution={modelInfo?.delta_distribution ?? []}
                 playerDelta={quality.delta}
                 playerName={name}
               />
@@ -190,10 +208,10 @@ export default function VsModelMode() {
 
           <ShotSelectionCard playerId={playerId} name={name} />
 
-          {(info?.calibration_by_distance?.length ?? 0) > 0 && (
+          {(modelInfo?.calibration_by_distance?.length ?? 0) > 0 && (
             <Card className="section-in">
               <CardTitle>Can you trust the model? Predicted vs real make rates</CardTitle>
-              <CalibrationChart rows={info.calibration_by_distance} />
+              <CalibrationChart rows={modelInfo?.calibration_by_distance ?? []} />
             </Card>
           )}
         </>

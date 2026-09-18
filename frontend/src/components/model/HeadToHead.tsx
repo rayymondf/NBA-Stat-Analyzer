@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
+import type { ComparisonBlock, PlayerBio, PlayerSummary } from "../../lib/types";
 import { num, pct, signed } from "../../lib/format";
 import SearchPalette from "../SearchPalette";
 import ShotChart from "../ShotChart";
@@ -10,32 +11,32 @@ import { Card, CardTitle, ErrorState, GlossaryTip, Skeleton } from "../ui";
 const A_COLOR = "var(--series-1)";
 const B_COLOR = "var(--series-6)";
 
-const ROWS: { key: string[]; label: string; fmt: (v: any) => string; tip?: string; from: "per" | "shoot" | "eff" }[] = [
-  { key: ["PTS"], label: "Points", fmt: (v) => num(v), from: "per" },
-  { key: ["REB"], label: "Rebounds", fmt: (v) => num(v), from: "per" },
-  { key: ["AST"], label: "Assists", fmt: (v) => num(v), from: "per" },
-  { key: ["STL"], label: "Steals", fmt: (v) => num(v), from: "per" },
-  { key: ["BLK"], label: "Blocks", fmt: (v) => num(v), from: "per" },
-  { key: ["TOV"], label: "Turnovers", fmt: (v) => num(v), from: "per" },
-  { key: ["PF"], label: "Fouls", fmt: (v) => num(v), from: "per" },
-  { key: ["MIN"], label: "Minutes", fmt: (v) => num(v), from: "per" },
-  { key: ["TS_PCT"], label: "True shooting", fmt: pct, tip: "TS_PCT", from: "shoot" },
-  { key: ["EFG_PCT"], label: "Effective FG", fmt: pct, tip: "EFG_PCT", from: "shoot" },
-  { key: ["FG3_PCT"], label: "3PT %", fmt: pct, from: "shoot" },
-  { key: ["FT_RATE"], label: "FT rate", fmt: (v) => num(v, 2), tip: "FT_RATE", from: "shoot" },
-  { key: ["AST_TO"], label: "AST/TO", fmt: (v) => num(v, 2), tip: "AST_TO", from: "shoot" },
-  { key: ["usg_pct"], label: "Usage", fmt: pct, tip: "USG_PCT", from: "eff" },
-  { key: ["off_rating"], label: "Off. rating", fmt: (v) => num(v), tip: "OFF_RATING", from: "eff" },
-  { key: ["def_rating"], label: "Def. rating", fmt: (v) => num(v), tip: "DEF_RATING", from: "eff" },
-  { key: ["net_rating"], label: "Net rating", fmt: (v) => signed(v), tip: "NET_RATING", from: "eff" },
+const ROWS: { key: string; label: string; fmt: (v: number | null | undefined) => string; tip?: string; from: "per" | "shoot" | "eff" }[] = [
+  { key: "PTS", label: "Points", fmt: (v) => num(v), from: "per" },
+  { key: "REB", label: "Rebounds", fmt: (v) => num(v), from: "per" },
+  { key: "AST", label: "Assists", fmt: (v) => num(v), from: "per" },
+  { key: "STL", label: "Steals", fmt: (v) => num(v), from: "per" },
+  { key: "BLK", label: "Blocks", fmt: (v) => num(v), from: "per" },
+  { key: "TOV", label: "Turnovers", fmt: (v) => num(v), from: "per" },
+  { key: "PF", label: "Fouls", fmt: (v) => num(v), from: "per" },
+  { key: "MIN", label: "Minutes", fmt: (v) => num(v), from: "per" },
+  { key: "TS_PCT", label: "True shooting", fmt: pct, tip: "TS_PCT", from: "shoot" },
+  { key: "EFG_PCT", label: "Effective FG", fmt: pct, tip: "EFG_PCT", from: "shoot" },
+  { key: "FG3_PCT", label: "3PT %", fmt: pct, from: "shoot" },
+  { key: "FT_RATE", label: "FT rate", fmt: (v) => num(v, 2), tip: "FT_RATE", from: "shoot" },
+  { key: "AST_TO", label: "AST/TO", fmt: (v) => num(v, 2), tip: "AST_TO", from: "shoot" },
+  { key: "usg_pct", label: "Usage", fmt: pct, tip: "USG_PCT", from: "eff" },
+  { key: "off_rating", label: "Off. rating", fmt: (v) => num(v), tip: "OFF_RATING", from: "eff" },
+  { key: "def_rating", label: "Def. rating", fmt: (v) => num(v), tip: "DEF_RATING", from: "eff" },
+  { key: "net_rating", label: "Net rating", fmt: (v) => signed(v), tip: "NET_RATING", from: "eff" },
 ];
 
-function valueOf(block: any, row: (typeof ROWS)[number], perMode: string) {
+function valueOf(block: ComparisonBlock, row: (typeof ROWS)[number], perMode: "per_game" | "per_75") {
   const src =
     row.from === "per" ? block?.stats?.[perMode] :
     row.from === "shoot" ? block?.stats?.shooting :
     block?.efficiency;
-  return src?.[row.key[0]] ?? null;
+  return src?.[row.key] ?? null;
 }
 
 /** Classic two-player head-to-head comparison. */
@@ -73,7 +74,7 @@ export default function HeadToHead() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid sm:grid-cols-2 gap-4">
         <PlayerSlot color={A_COLOR} info={data?.a?.info ?? infoA} label="Player A" onPick={() => setPicking("a")} />
         <PlayerSlot color={B_COLOR} info={data?.b?.info ?? infoB} label="Player B" onPick={() => setPicking("b")} />
       </div>
@@ -106,7 +107,8 @@ export default function HeadToHead() {
                 <GlossaryTip term="PER_75" />
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="overflow-x-auto">
+            <div className="space-y-1.5 min-w-[640px]">
               {ROWS.map((row) => {
                 const va = valueOf(data.a, row, perMode);
                 const vb = valueOf(data.b, row, perMode);
@@ -130,6 +132,7 @@ export default function HeadToHead() {
                   </div>
                 );
               })}
+            </div>
             </div>
           </Card>
 
@@ -160,7 +163,12 @@ export default function HeadToHead() {
   );
 }
 
-function PlayerSlot({ info, label, color, onPick }: any) {
+function PlayerSlot({ info, label, color, onPick }: {
+  info?: PlayerBio | PlayerSummary;
+  label: string;
+  color: string;
+  onPick: () => void;
+}) {
   return (
     <button onClick={onPick} className="card p-4 flex items-center gap-3 hover:border-ink-muted transition-colors text-left">
       {info ? (

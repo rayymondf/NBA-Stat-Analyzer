@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
@@ -12,7 +12,7 @@ export default function GameLogSection({ playerId, filters }: {
   playerId: number;
   filters: ProfileFilters;
 }) {
-  const { perMode, ...apiFilters } = filters;
+  const { perMode: _perMode, ...apiFilters } = filters;
   const [sort, setSort] = useState<SortKey>("date");
   const [desc, setDesc] = useState(true);
 
@@ -32,10 +32,16 @@ export default function GameLogSection({ playerId, filters }: {
     return desc ? bv - av : av - bv;
   });
 
-  const TH = ({ k, children, align = "right" }: { k?: SortKey; children: any; align?: string }) => (
+  const TH = ({ k, children, align = "right" }: { k?: SortKey; children: ReactNode; align?: "left" | "right" }) => (
     <th
       className={`py-2 px-2 font-medium text-${align} ${k ? "cursor-pointer hover:text-ink select-none" : ""}`}
-      onClick={k ? () => { sort === k ? setDesc(!desc) : (setSort(k), setDesc(true)); } : undefined}
+      onClick={k ? () => {
+        if (sort === k) setDesc(!desc);
+        else {
+          setSort(k);
+          setDesc(true);
+        }
+      } : undefined}
     >
       {children}{sort === k ? (desc ? " ↓" : " ↑") : ""}
     </th>

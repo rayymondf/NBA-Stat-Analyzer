@@ -1,21 +1,60 @@
-const BASE = "/api";
+import type {
+  AiReport, Career, Comparison, Efficiency, Fouls, GameDetail, GameLog,
+  Impact, Investigation, Leader, ListedGame, ModelInfo, Overview, Playtime,
+  PlayerSummary, ProblemDetails, ShotProfile, ShotQuality, SimilarPlayers,
+  Trends,
+} from "./types";
 
-export const DATASET_URL = "/api/ml/dataset.csv";
+const BASE = "/api/v1";
 
-async function get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-  const qs = params
-    ? "?" +
-      Object.entries(params)
-        .filter(([, v]) => v !== undefined && v !== null && v !== "")
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-        .join("&")
-    : "";
-  const res = await fetch(`${BASE}${path}${qs}`);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed (${res.status})`);
+export const DATASET_URL = `${BASE}/ml/dataset.csv`;
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly requestId?: string;
+  readonly retryable: boolean;
+
+  constructor(
+    message: string,
+    status: number,
+    requestId?: string,
+    retryable = false,
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.requestId = requestId;
+    this.retryable = retryable;
   }
-  return res.json();
+}
+
+async function responseJson<T>(res: Response): Promise<T> {
+  const cacheStatus = res.headers.get("X-Data-Cache");
+  if (cacheStatus && cacheStatus !== "none" && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("nba-cache-status", { detail: cacheStatus }));
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({} as Partial<ProblemDetails>)) as Partial<ProblemDetails>;
+    throw new ApiError(
+      body.detail || `Request failed (${res.status})`,
+      res.status,
+      body.request_id ?? res.headers.get("X-Request-ID") ?? undefined,
+      body.retryable ?? false,
+    );
+  }
+  return res.json() as Promise<T>;
+}
+
+async function get<T>(path: string, params?: object, init?: RequestInit): Promise<T> {
+  const entries = params
+    ? Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null && value !== "")
+      .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    : [];
+  const qs = entries.length ? `?${entries.join("&")}` : "";
+  const url = `${BASE}${path}${qs}`;
+  const res = init ? await fetch(url, init) : await fetch(url);
+  return responseJson<T>(res);
 }
 
 export interface SearchResult {
@@ -46,36 +85,7 @@ export interface Filters {
   date_to?: string;
 }
 
-export interface Percentile {
-  value: number;
-  percentile: number;
-  position_group: string;
-  pool_size: number;
-}
-
-export interface ShotPoint {
-  x: number;
-  y: number;
-  made: boolean;
-  value: number;
-  dist: number;
-  game_id: string;
-  date: string;
-  period: number;
-  action: string;
-  zone: string;
-  vs: string;
-}
-
-export interface Zone {
-  zone: string;
-  fga: number;
-  fgm: number;
-  pct: number | null;
-  league_pct: number | null;
-  diff: number | null;
-  freq: number;
-}
+export type { Percentile, ShotPoint, Zone } from "./types";
 
 export const api = {
   meta: () =>
@@ -87,35 +97,31 @@ export const api = {
       player_lookup_note: string;
       freshness_note: string;
     }>("/meta"),
-  search: (q: string) => get<SearchResult[]>("/players/search", { q }),
-  summary: (id: number, p?: Filters) => get<any>(`/players/${id}/summary`, p as any),
-  overview: (id: number, p?: Filters) => get<any>(`/players/${id}/overview`, p as any),
-  shooting: (id: number, p?: Record<string, unknown>) => get<any>(`/players/${id}/shooting`, p),
-  shotQuality: (id: number, p?: Filters) => get<any>(`/players/${id}/shot-quality`, p as any),
-  efficiency: (id: number, p?: Filters) => get<any>(`/players/${id}/efficiency`, p as any),
-  playtime: (id: number, p?: Filters) => get<any>(`/players/${id}/playtime`, p as any),
-  fouls: (id: number, p?: Filters) => get<any>(`/players/${id}/fouls`, p as any),
-  gamelog: (id: number, p?: Filters) => get<any>(`/players/${id}/gamelog`, p as any),
-  gameDetail: (id: number, gameId: string) => get<any>(`/players/${id}/games/${gameId}`),
-  trends: (id: number, p?: Filters) => get<any>(`/players/${id}/trends`, p as any),
-  career: (id: number) => get<any>(`/players/${id}/career`),
-  impact: (id: number, p?: Filters) => get<any>(`/players/${id}/impact`, p as any),
-  compare: (a: number, b: number, p?: Filters) => get<any>("/compare", { a, b, ...p }),
-  modelInfo: () => get<any>("/ml/model-info"),
-  games: (p?: Record<string, unknown>) => get<any[]>("/games", p),
-  investigate: (gameId: string) => get<any>(`/games/${gameId}/investigate`),
-  leaders: (p?: Record<string, unknown>) => get<any[]>("/league/leaders", p),
-  similar: (id: number, p?: Record<string, unknown>) => get<any>(`/league/similar/${id}`, p),
+  search: (q: string, signal?: AbortSignal) => get<SearchResult[]>(
+    "/players/search", { q }, signal ? { signal } : undefined,
+  ),
+  summary: (id: number, p?: Filters) => get<PlayerSummary>(`/players/${id}/summary`, p),
+  overview: (id: number, p?: Filters) => get<Overview>(`/players/${id}/overview`, p),
+  shooting: (id: number, p?: Record<string, unknown>) => get<ShotProfile>(`/players/${id}/shooting`, p),
+  shotQuality: (id: number, p?: Filters) => get<ShotQuality>(`/players/${id}/shot-quality`, p),
+  efficiency: (id: number, p?: Filters) => get<Efficiency>(`/players/${id}/efficiency`, p),
+  playtime: (id: number, p?: Filters) => get<Playtime>(`/players/${id}/playtime`, p),
+  fouls: (id: number, p?: Filters) => get<Fouls>(`/players/${id}/fouls`, p),
+  gamelog: (id: number, p?: Filters) => get<GameLog>(`/players/${id}/gamelog`, p),
+  gameDetail: (id: number, gameId: string) => get<GameDetail>(`/players/${id}/games/${gameId}`),
+  trends: (id: number, p?: Filters) => get<Trends>(`/players/${id}/trends`, p),
+  career: (id: number) => get<Career>(`/players/${id}/career`),
+  impact: (id: number, p?: Filters) => get<Impact>(`/players/${id}/impact`, p),
+  compare: (a: number, b: number, p?: Filters) => get<Comparison>("/compare", { a, b, ...p }),
+  modelInfo: () => get<ModelInfo>("/ml/model-info"),
+  games: (p?: Record<string, unknown>) => get<ListedGame[]>("/games", p),
+  investigate: (gameId: string) => get<Investigation>(`/games/${gameId}/investigate`),
+  leaders: (p?: Record<string, unknown>) => get<Leader[]>("/league/leaders", p),
+  similar: (id: number, p?: Record<string, unknown>) => get<SimilarPlayers>(`/league/similar/${id}`, p),
   ask: (body: { question: string; mode?: string; context?: Record<string, unknown> }) =>
     fetch(`${BASE}/ai/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }).then(async (r) => {
-      if (!r.ok) {
-        const b = await r.json().catch(() => ({}));
-        throw new Error(b.detail || `AI request failed (${r.status})`);
-      }
-      return r.json();
-    }),
+    }).then((response) => responseJson<AiReport>(response)),
 };

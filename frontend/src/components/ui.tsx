@@ -98,11 +98,16 @@ export function SkeletonCard({ lines = 4 }: { lines?: number }) {
   );
 }
 
-export function ErrorState({ message }: { message: string }) {
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <div className="card p-6 text-center">
       <p className="text-ink-2 text-sm">Couldn't load this section.</p>
       <p className="text-ink-muted text-xs mt-1">{message}</p>
+      {onRetry && (
+        <button className="text-xs underline underline-offset-2 mt-3" onClick={onRetry}>
+          Try again
+        </button>
+      )}
     </div>
   );
 }
@@ -207,6 +212,7 @@ export function Segmented<T extends string>({ options, value, onChange }: {
               ? "bg-surface text-ink shadow-sm font-medium"
               : "text-ink-muted hover:text-ink-2"
           }`}
+          aria-pressed={value === o.value}
         >
           {o.label}
         </button>

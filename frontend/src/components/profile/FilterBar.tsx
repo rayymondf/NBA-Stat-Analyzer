@@ -27,6 +27,7 @@ export default function FilterBar({ filters, onChange }: {
           Season
         </span>
         <select
+          aria-label="Season"
           className={selectCls}
           value={filters.season ?? ""}
           onChange={(e) => set({ season: e.target.value })}
@@ -62,6 +63,7 @@ export default function FilterBar({ filters, onChange }: {
           Splits
         </span>
       <select
+        aria-label="Game location"
         className={selectCls}
         value={filters.location ?? ""}
         onChange={(e) => set({ location: e.target.value || undefined })}
@@ -72,6 +74,7 @@ export default function FilterBar({ filters, onChange }: {
       </select>
 
       <select
+        aria-label="Game result"
         className={selectCls}
         value={filters.outcome ?? ""}
         onChange={(e) => set({ outcome: e.target.value || undefined })}
@@ -82,6 +85,7 @@ export default function FilterBar({ filters, onChange }: {
       </select>
 
       <select
+        aria-label="Starter status"
         className={selectCls}
         value={filters.starter === undefined ? "" : String(filters.starter)}
         onChange={(e) => set({ starter: e.target.value === "" ? undefined : e.target.value === "true" })}
@@ -92,6 +96,7 @@ export default function FilterBar({ filters, onChange }: {
       </select>
 
       <select
+        aria-label="Recent games window"
         className={selectCls}
         value={filters.last_n ?? ""}
         onChange={(e) => set({ last_n: e.target.value ? Number(e.target.value) : undefined })}
@@ -103,6 +108,7 @@ export default function FilterBar({ filters, onChange }: {
       </select>
 
       <select
+        aria-label="Opponent"
         className={selectCls}
         value={filters.opponent ?? ""}
         onChange={(e) => set({ opponent: e.target.value || undefined })}
@@ -114,6 +120,7 @@ export default function FilterBar({ filters, onChange }: {
       <div className="flex items-center gap-1">
         <input
           type="date"
+          aria-label="Start date"
           className={selectCls}
           value={filters.date_from ?? ""}
           onChange={(e) => set({ date_from: e.target.value || undefined })}
@@ -122,6 +129,7 @@ export default function FilterBar({ filters, onChange }: {
         <span className="text-ink-muted text-xs">–</span>
         <input
           type="date"
+          aria-label="End date"
           className={selectCls}
           value={filters.date_to ?? ""}
           onChange={(e) => set({ date_to: e.target.value || undefined })}

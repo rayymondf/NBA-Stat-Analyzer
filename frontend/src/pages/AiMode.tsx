@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
+import type { AiReport } from "../lib/types";
 import { Card, HowItsMade, Segmented } from "../components/ui";
 
 const EXAMPLES = [
@@ -13,32 +14,9 @@ const EXAMPLES = [
 
 type Mode = "auto" | "player" | "claim" | "compare" | "game";
 
-interface Report {
-  answer_markdown: string;
-  verdict: string | null;
-  key_findings: { claim: string; evidence: string }[];
-  counterevidence: string[];
-  data_scope: { seasons?: string[]; sample?: string; definitions?: string[]; filters?: string };
-  links: { type: string; id: string | number; label: string }[];
-  confidence?: string;
-  tool_trace?: { tool: string; args: Record<string, unknown> }[];
-  generated_at?: string;
-  model?: string;
-  cached?: boolean;
-  model_attempts?: number;
-  usage?: {
-    input_tokens?: number;
-    output_tokens?: number;
-    thinking_tokens?: number;
-    tool_prompt_tokens?: number;
-    cached_input_tokens?: number;
-    total_tokens?: number;
-  };
-}
-
 interface Turn {
   question: string;
-  report?: Report;
+  report?: AiReport;
   error?: string;
 }
 
@@ -90,7 +68,7 @@ function Progress() {
   );
 }
 
-function ReportCard({ r }: { r: Report }) {
+function ReportCard({ r }: { r: AiReport }) {
   const [showScope, setShowScope] = useState(false);
   return (
     <Card className="space-y-4">
@@ -198,7 +176,7 @@ export default function AiMode() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const mutation = useMutation({
-    mutationFn: (q: string) => api.ask({ question: q, mode, context: context.current as any }),
+    mutationFn: (q: string) => api.ask({ question: q, mode, context: context.current }),
     onSuccess: (report, q) =>
       setTurns((t) => t.map((turn) => (turn.question === q && !turn.report && !turn.error ? { ...turn, report } : turn))),
     onError: (err, q) =>
@@ -249,7 +227,7 @@ export default function AiMode() {
             { value: "game" as Mode, label: "Game" },
           ]}
           value={mode}
-          onChange={setMode}
+          onChange={(value) => setMode(value)}
         />
       </div>
 
@@ -333,11 +311,11 @@ export default function AiMode() {
       </div>
 
       <HowItsMade>
-        Questions go to Google's Gemini API on its free tier. The AI never
-        invents numbers: it can only call this app's own statistical tools and
-        must cite what they return. Every report lists the exact analyses it
-        ran, and identical questions are answered from a local cache for 12
-        hours so no quota is wasted.
+        Questions sent to Gemini are grounded with this app's statistical
+        tools and instructed to cite their outputs. Generated explanations can
+        still be wrong, so every report exposes its analyses and evidence for
+        verification. Identical successful questions may be served from a
+        12-hour local cache.
       </HowItsMade>
     </div>
   );

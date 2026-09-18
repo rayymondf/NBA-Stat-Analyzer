@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./lib/api";
-import SearchPalette, { useSearchPalette } from "./components/SearchPalette";
+import SearchPalette from "./components/SearchPalette";
+import { useSearchPalette } from "./hooks/useSearchPalette";
 
 const Home = lazy(() => import("./pages/Home"));
 const PlayerProfile = lazy(() => import("./pages/PlayerProfile"));
@@ -63,17 +64,25 @@ function DataFreshnessFooter() {
 
 export default function App() {
   const { open, setOpen } = useSearchPalette();
+  const [staleData, setStaleData] = useState(false);
+  useEffect(() => {
+    const update = (event: Event) => {
+      setStaleData((event as CustomEvent<string>).detail === "stale");
+    };
+    window.addEventListener("nba-cache-status", update);
+    return () => window.removeEventListener("nba-cache-status", update);
+  }, []);
 
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-edge bg-page/85 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
-          <NavLink to="/" className="flex items-center mr-3 shrink-0">
+        <div className="max-w-6xl mx-auto px-4 min-h-14 py-2 flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
+          <NavLink to="/" className="hidden sm:flex items-center mr-3 shrink-0">
             <span className="font-display font-semibold text-lg tracking-tight">
               NBA Stat Analyzer
             </span>
           </NavLink>
-          <nav className="flex items-center gap-1 self-stretch">
+          <nav className="order-last sm:order-none w-full sm:w-auto flex items-center gap-1 self-stretch overflow-x-auto">
             <span className="flex items-center"><NavLink to="/" className={navLink} end>Players</NavLink></span>
             <span className="flex items-center"><NavLink to="/games" className={navLink}>Games</NavLink></span>
             <span className="flex items-center"><NavLink to="/model" className={navLink}>The Model</NavLink></span>
@@ -103,6 +112,12 @@ export default function App() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {staleData && (
+          <div role="status" className="mb-4 rounded-lg border border-[var(--series-4)] bg-surface px-4 py-2 text-xs text-ink-2 flex items-center gap-3">
+            <span className="flex-1">NBA.com is temporarily unavailable. Some results are from the bounded stale cache and may not include the latest games.</span>
+            <button className="underline underline-offset-2" onClick={() => setStaleData(false)}>Dismiss</button>
+          </div>
+        )}
         <Suspense fallback={<div className="text-sm text-ink-muted py-8">Loading…</div>}>
           <Routes>
             <Route path="/" element={<Home onSearch={() => setOpen(true)} />} />

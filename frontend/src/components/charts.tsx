@@ -2,6 +2,8 @@ import {
   Bar, CartesianGrid, ComposedChart, Line, LineChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
+import type { ReactNode } from "react";
+import type { TimelinePoint } from "../lib/types";
 
 const AXIS = {
   stroke: "var(--baseline)",
@@ -10,17 +12,32 @@ const AXIS = {
   axisLine: { stroke: "var(--baseline)" },
 };
 
-export function ChartTooltip({ active, payload, label, formatter }: any) {
+interface TooltipEntry {
+  dataKey?: string | number;
+  stroke?: string;
+  fill?: string;
+  name?: string | number;
+  value?: string | number;
+}
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: ReactNode;
+  formatter?: (value: number, key: string) => ReactNode;
+}
+
+export function ChartTooltip({ active, payload, label, formatter }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
   return (
     <div className="card px-3 py-2 text-xs shadow-xl" style={{ background: "var(--surface-2)" }}>
       <div className="text-ink-muted mb-1">{label}</div>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center gap-2">
+      {payload.map((p) => (
+        <div key={String(p.dataKey)} className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full" style={{ background: p.stroke ?? p.fill }} />
           <span className="text-ink-2">{p.name}:</span>
           <span className="tnum font-medium">
-            {formatter ? formatter(p.value, p.dataKey) : p.value}
+            {formatter ? formatter(Number(p.value), String(p.dataKey)) : p.value}
           </span>
         </div>
       ))}
@@ -36,14 +53,14 @@ export interface Series {
 }
 
 /** Themed multi-series line chart (2px lines, recessive grid, crosshair tooltip). */
-export function TrendChart({
+export function TrendChart<T extends object>({
   data, series, height = 240, yDomain, formatter, xKey = "date",
 }: {
-  data: any[];
+  data: T[];
   series: Series[];
   height?: number;
   yDomain?: [number | string, number | string];
-  formatter?: (v: any, key: string) => string;
+  formatter?: (v: number, key: string) => ReactNode;
   xKey?: string;
 }) {
   return (
@@ -51,7 +68,7 @@ export function TrendChart({
       <LineChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -14 }}>
         <CartesianGrid stroke="var(--grid)" vertical={false} />
         <XAxis dataKey={xKey} {...AXIS} minTickGap={40} tickFormatter={(d) => String(d).slice(5)} />
-        <YAxis {...AXIS} domain={yDomain as any} width={46} />
+        <YAxis {...AXIS} domain={yDomain} width={46} />
         <Tooltip content={<ChartTooltip formatter={formatter} />} cursor={{ stroke: "var(--ink-muted)", strokeDasharray: "3 3" }} />
         {series.map((s) => (
           <Line
@@ -72,7 +89,7 @@ export function TrendChart({
 }
 
 /** Minutes bars + points line, game by game. */
-export function MinutesProductionChart({ data, height = 260 }: { data: any[]; height?: number }) {
+export function MinutesProductionChart<T extends object>({ data, height = 260 }: { data: T[]; height?: number }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ top: 6, right: 8, bottom: 0, left: -14 }} barCategoryGap="20%">
@@ -89,7 +106,7 @@ export function MinutesProductionChart({ data, height = 260 }: { data: any[]; he
 
 /** Score-margin worm for a single game (positive = home leads). */
 export function GameFlowChart({ data, homeAbbr, awayAbbr, height = 220 }: {
-  data: any[]; homeAbbr: string; awayAbbr: string; height?: number;
+  data: TimelinePoint[]; homeAbbr: string; awayAbbr: string; height?: number;
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
