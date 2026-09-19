@@ -285,6 +285,42 @@ gate (no forced promotion).
   serving the built `dist`; Vite dev on :5173 (proxies `/api` -> :8000).
 - **Owner:** Primary agent. Effort complete.
 
+## Checkpoint — Post-completion polish: layout + default light theme
+
+- **Revision:** `main` at `717cbb1` (working tree).
+- **Files changed:** `frontend/src/components/model/VsModelMode.tsx` (Shot Quality
+  header unified into one balanced Card: player identity left, period selects
+  right — removed the split card + far-right floating selects), `frontend/index.html`
+  (`data-theme="dark"` -> `"light"` default; stored preference still honored),
+  `frontend/src/App.tsx` (ThemeToggle fallback -> `"light"`).
+- **Completed:** Fixed the main layout flaw (Shot Quality header asymmetry/large
+  empty gap) and set light mode as the app default per request. Reviewed Games
+  investigation, Home, Profile, Compare — spacing/symmetry are sound (the earlier
+  "missing Games title" was just a scroll crop; the h1 renders).
+- **Checks:** `npx tsc -b` clean; `npx vitest run --no-coverage` — 9 files, 32
+  passed; `npm run build` clean. Built app on :8000 verified: default theme
+  resolves to **light** with no stored preference; home console 0 errors;
+  Shot Quality header renders as one balanced panel.
+- **Owner:** Primary agent.
+
+## Checkpoint — Polish: search UI spacing + app rhythm consistency
+
+- **Revision:** `main` at `717cbb1` (working tree).
+- **Files changed:** `frontend/src/components/SearchPalette.tsx` (roomier input
+  row `px-5`/`py-4`, 18px icon, cleaner ESC key; results container `p-2` with
+  inset `rounded-xl` rows and `w-10` avatars; centered state messages; new
+  keyboard-hint footer mirroring the input's top border for vertical symmetry;
+  overlay `px-4` for mobile margins), `frontend/src/pages/PlayerProfile.tsx`
+  (`space-y-4` -> `space-y-6`), `frontend/src/components/model/VsModelMode.tsx`
+  (`space-y-5` -> `space-y-6`, matching ModelLab for consistent page rhythm).
+- **Completed:** Search palette now has balanced, modern command-palette spacing.
+  Standardized the primary analysis pages to a `space-y-6` vertical rhythm.
+- **Checks:** `npx tsc -b` clean; `npm run lint -- --deny-warnings` 0/0;
+  `npx vitest run --no-coverage` 9 files / **32 passed** (SearchPalette contract
+  intact); `npm run build` clean. Live (dev + built :8000): palette renders with
+  results, active row, and footer hints; **0 console errors**.
+- **Owner:** Primary agent.
+
 ## Verification commands to record (per task)
 
 - Backend: `uv sync --locked --extra dev`; `uv run ruff check app scripts tests`;

@@ -65,7 +65,7 @@ export default function PlayerProfile() {
   if (!Number.isInteger(playerId) || playerId < 1) return <ErrorState message="This player profile is unavailable." />;
   if (error && !summary) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
 
-  return <div className="space-y-4">
+  return <div className="space-y-6">
     <section className="card overflow-hidden">
       <div className="px-4 py-5 sm:px-6" style={{ background: "linear-gradient(135deg, color-mix(in oklab, var(--primary) 16%, var(--surface)) 0%, var(--surface) 72%)" }}>
         {isLoading || !summary ? <ProfileSkeleton /> : <>

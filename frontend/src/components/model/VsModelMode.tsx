@@ -57,14 +57,14 @@ export default function VsModelMode() {
     setParams(next);
   };
   return (
-    <div className="space-y-5 min-w-0">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <button onClick={() => setPicking(true)} className="card p-4 flex items-center gap-3 hover:border-ink-muted transition-colors text-left w-full sm:w-auto sm:min-w-80" aria-label={playerId ? "Change player" : "Choose player"}>
+    <div className="space-y-6 min-w-0">
+      <Card className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
+        <button onClick={() => setPicking(true)} className="flex items-center gap-3 text-left rounded-xl p-2 -m-2 hover:bg-surface-2 transition-colors" aria-label={playerId ? "Change player" : "Choose player"}>
           {bio ? <img src={bio.headshot} alt="" className="w-14 h-14 rounded-full object-cover bg-surface-2" /> : <span className="w-14 h-14 rounded-full bg-surface-2 grid place-items-center text-xl">+</span>}
           <div><div className="text-base font-semibold">{name ?? (playerId ? `Player ${playerId}` : "Choose a player")}</div><div className="text-xs text-ink-muted mt-1">{bio ? `${bio.team ?? "—"} · ${bio.position ?? "—"}` : "Explore actual and expected shooting"}</div>{playerId && <span className="text-xs underline underline-offset-2">Change player</span>}</div>
         </button>
         <AnalysisPeriod />
-      </div>
+      </Card>
       {summary.isError && <ErrorState message="Player details are unavailable." onRetry={() => void summary.refetch()} />}
       {!playerId ? <Card className="py-12 text-center"><h2 className="font-display text-xl font-bold">Start with a player's shots</h2><p className="text-sm text-ink-muted mt-2">Choose a player and period to see actual shooting, the model estimate and the difference.</p></Card>
         : isLoading ? <div className="space-y-3"><Skeleton className="h-40 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>

@@ -24,7 +24,7 @@ const navLink = ({ isActive }: { isActive: boolean }) =>
   `nav-link ${isActive ? "nav-link-active" : ""}`;
 
 function ThemeToggle() {
-  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "dark");
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "light");
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try { localStorage.setItem("nba-theme", theme); } catch { /* storage may be disabled */ }
