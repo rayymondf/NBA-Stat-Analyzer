@@ -8,12 +8,17 @@ import ShotDifficultyExplainer from "../model/ShotDifficultyExplainer";
 import { Card, CardTitle, ErrorState, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
-export default function ShootingSection({ playerId, filters }: {
+export default function ShootingSection({ playerId, filters, chartFilters }: {
   playerId: number;
   filters: ProfileFilters;
+  chartFilters?: { quarter: number | null; result: "all" | "made" | "missed"; onChange: (patch: Partial<{ quarter: number | null; result: "all" | "made" | "missed" }>) => void };
 }) {
-  const [quarter, setQuarter] = useState<number | null>(null);
-  const [result, setResult] = useState<"all" | "made" | "missed">("all");
+  const [localQuarter, setLocalQuarter] = useState<number | null>(null);
+  const [localResult, setLocalResult] = useState<"all" | "made" | "missed">("all");
+  const quarter = chartFilters?.quarter ?? localQuarter;
+  const result = chartFilters?.result ?? localResult;
+  const setQuarter = (value: number | null) => chartFilters ? chartFilters.onChange({ quarter: value }) : setLocalQuarter(value);
+  const setResult = (value: "all" | "made" | "missed") => chartFilters ? chartFilters.onChange({ result: value }) : setLocalResult(value);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["shooting", playerId, filters.season, filters.season_type],
@@ -64,7 +69,7 @@ export default function ShootingSection({ playerId, filters }: {
         <Card>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <select
-              className="bg-surface border border-edge rounded-lg px-2.5 py-1.5 text-xs outline-none"
+              className="bg-surface-container border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs outline-none hover:border-outline transition-colors"
               value={quarter ?? ""}
               onChange={(e) => setQuarter(e.target.value ? Number(e.target.value) : null)}
             >
@@ -73,7 +78,7 @@ export default function ShootingSection({ playerId, filters }: {
               <option value="5">OT</option>
             </select>
             <select
-              className="bg-surface border border-edge rounded-lg px-2.5 py-1.5 text-xs outline-none"
+              className="bg-surface-container border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs outline-none hover:border-outline transition-colors"
               value={result}
               onChange={(e) => setResult(e.target.value as "all" | "made" | "missed")}
             >
@@ -164,7 +169,7 @@ export default function ShootingSection({ playerId, filters }: {
               </p>
               {quality.uncertainty_note && <p className="text-[10px] text-ink-muted mt-1">{quality.uncertainty_note}</p>}
               <Link
-                to={`/model?player=${playerId}`}
+                to={`/model?player=${playerId}&season=${encodeURIComponent(filters.season ?? "")}&season_type=${encodeURIComponent(filters.season_type ?? "Regular Season")}`}
                 className="inline-block text-[11px] mt-2 font-medium underline underline-offset-2 hover:text-ink transition-colors"
                 style={{ color: "var(--series-1)" }}
               >

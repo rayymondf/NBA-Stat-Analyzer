@@ -15,6 +15,7 @@ const EXAMPLES = [
 type Mode = "auto" | "player" | "claim" | "compare" | "game";
 
 interface Turn {
+  id: number;
   question: string;
   report?: AiReport;
   error?: string;
@@ -171,37 +172,42 @@ export default function AiMode() {
   const [mode, setMode] = useState<Mode>("auto");
   const [input, setInput] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [showModes, setShowModes] = useState(false);
   const context = useRef<Record<string, unknown> | undefined>(undefined);
-  const autoSubmitted = useRef(false);
+  const nextTurnId = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const mutation = useMutation({
-    mutationFn: (q: string) => api.ask({ question: q, mode, context: context.current }),
-    onSuccess: (report, q) =>
-      setTurns((t) => t.map((turn) => (turn.question === q && !turn.report && !turn.error ? { ...turn, report } : turn))),
-    onError: (err, q) =>
-      setTurns((t) => t.map((turn) => (turn.question === q && !turn.report && !turn.error ? { ...turn, error: (err as Error).message } : turn))),
+    mutationFn: ({ question }: { id: number; question: string }) => api.ask({ question, mode, context: context.current }),
+    onSuccess: (report, { id }) =>
+      setTurns((t) => t.map((turn) => (turn.id === id ? { ...turn, report, error: undefined } : turn))),
+    onError: (err, { id }) =>
+      setTurns((t) => t.map((turn) => (turn.id === id ? { ...turn, error: (err as Error).message } : turn))),
   });
 
   const submit = (q: string) => {
     const question = q.trim();
     if (!question || mutation.isPending) return;
-    setTurns((t) => [...t, { question }]);
+    const id = nextTurnId.current++;
+    setTurns((t) => [...t, { id, question }]);
     setInput("");
-    mutation.mutate(question);
+    mutation.mutate({ id, question });
   };
 
-  // Prefilled question coming from a player page / game page
+  const retry = (turn: Turn) => {
+    if (mutation.isPending) return;
+    setTurns((items) => items.map((item) => item.id === turn.id ? { ...item, error: undefined } : item));
+    mutation.mutate({ id: turn.id, question: turn.question });
+  };
+
+  // Navigation supplies draft wording and context only; it never sends a request.
   useEffect(() => {
     const state = location.state as { question?: string; context?: Record<string, unknown> } | null;
-    if (state?.question && !autoSubmitted.current) {
-      autoSubmitted.current = true;
+    if (state?.question) {
       context.current = state.context;
-      submit(state.question);
-      window.history.replaceState({}, "");
+      setInput(state.question);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.state]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -212,12 +218,17 @@ export default function AiMode() {
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div>
           <h1 className="font-display text-2xl font-semibold flex items-center gap-2">
-            <span style={{ color: "var(--series-7)" }}>✦</span> AI Mode
+            <span style={{ color: "var(--series-7)" }}>✦</span> Ask AI
           </h1>
           <p className="text-xs text-ink-muted mt-0.5">
-            Answers are built from this app's computed stats. Every claim shows its evidence.
+            Explore NBA data with an evidence-backed answer and its limitations.
           </p>
         </div>
+        <button type="button" onClick={() => setShowModes((open) => !open)} className="text-xs text-ink-muted hover:text-ink underline underline-offset-2" aria-expanded={showModes}>
+          {showModes ? "Hide routing options" : "Routing: Auto"}
+        </button>
+      </div>
+      {showModes && <div className="mb-4">
         <Segmented
           options={[
             { value: "auto" as Mode, label: "Auto" },
@@ -229,7 +240,7 @@ export default function AiMode() {
           value={mode}
           onChange={(value) => setMode(value)}
         />
-      </div>
+      </div>}
 
       <div className="space-y-4 mb-4">
         {turns.length === 0 && (
@@ -242,7 +253,7 @@ export default function AiMode() {
               {EXAMPLES.map((q) => (
                 <button
                   key={q}
-                  onClick={() => submit(q)}
+                  onClick={() => setInput(q)}
                   className="text-left text-xs px-3 py-2.5 rounded-lg border border-edge text-ink-2 hover:text-ink hover:border-ink-muted transition-colors"
                 >
                   <span style={{ color: "var(--series-7)" }}>✦</span> {q}
@@ -267,6 +278,7 @@ export default function AiMode() {
             {t.error && (
               <Card className="text-sm" >
                 <span style={{ color: "var(--serious)" }}>⚠</span> {t.error}
+                <button type="button" onClick={() => retry(t)} disabled={mutation.isPending} className="ml-3 text-xs underline underline-offset-2 disabled:opacity-50">Try again</button>
               </Card>
             )}
             {!t.report && !t.error && <Progress />}
@@ -301,7 +313,7 @@ export default function AiMode() {
             <button
               type="submit"
               disabled={mutation.isPending || !input.trim()}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40 transition-opacity shrink-0"
+              className="px-5 py-2.5 rounded-full text-sm font-semibold text-white disabled:opacity-40 transition-opacity shrink-0"
               style={{ background: "var(--series-7)" }}
             >
               Ask ↑

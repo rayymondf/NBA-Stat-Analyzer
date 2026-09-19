@@ -12,7 +12,7 @@ router = APIRouter(prefix="/games", tags=["games"])
 def list_games(season: Season | None = None,
                season_type: SeasonType = SeasonType.REGULAR,
                team: TeamAbbreviation | None = None,
-               limit: int = Query(default=100, ge=1, le=250)):
+               limit: int = Query(default=100, ge=1, le=1500)):
     return game_investigation.list_games(season or current_season(),
                                          str(season_type), team, limit)
 

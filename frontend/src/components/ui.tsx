@@ -1,19 +1,19 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { GLOSSARY } from "../lib/glossary";
 import { ordinal } from "../lib/format";
 
-/** Editorial page header: kicker, serif headline, muted dek, hairline rule. */
+/** Compact product page header with a clear task and supporting context. */
 export function PageHeader({ kicker, title, dek }: {
   kicker?: string; title: ReactNode; dek?: ReactNode;
 }) {
   return (
-    <div className="mb-8 section-in">
+    <div className="mb-6 section-in">
       {kicker && <div className="eyebrow mb-2">{kicker}</div>}
-      <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight leading-tight">
+      <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
         {title}
       </h1>
       {dek && <p className="text-sm text-ink-2 mt-2 max-w-2xl leading-relaxed">{dek}</p>}
-      <div className="rule mt-6" />
+      
     </div>
   );
 }
@@ -51,6 +51,7 @@ export function HowItsMade({ children }: { children: ReactNode }) {
     <div className="rule mt-10 pt-3">
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="eyebrow flex items-center gap-1.5 hover:text-ink-2 transition-colors"
       >
         <span
@@ -76,10 +77,10 @@ export function Card({ children, className = "", hover = false }: { children: Re
 
 export function CardTitle({ children, tip }: { children: ReactNode; tip?: string }) {
   return (
-    <h3 className="text-sm font-semibold text-ink-2 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+    <h2 className="text-base font-display font-bold text-ink mb-4 flex flex-wrap items-center gap-1.5">
       {children}
       {tip && <GlossaryTip term={tip} />}
-    </h3>
+    </h2>
   );
 }
 
@@ -163,11 +164,11 @@ export function PercentileBar({
     percentile >= 55 ? "var(--series-5)" :
     percentile >= 30 ? "var(--series-4)" : "var(--series-8)";
   return (
-    <div className="flex items-center gap-3 py-1" title={poolLabel}>
-      <div className="w-28 shrink-0 text-xs text-ink-2 flex items-center">
+    <div className="flex items-center gap-2 sm:gap-3 py-1.5" title={poolLabel}>
+      <div className="w-20 sm:w-28 shrink-0 text-xs text-ink-2 flex items-center">
         <GlossaryTip term={format ?? label} label={label} />
       </div>
-      <div className="w-14 shrink-0 text-sm tnum font-medium text-right">{value}</div>
+      <div className="w-12 sm:w-14 shrink-0 text-sm tnum font-medium text-right">{value}</div>
       <div className="flex-1 h-2 rounded-full bg-surface-2 overflow-hidden">
         <div
           className="bar-fill h-full rounded-full"
@@ -202,21 +203,68 @@ export function Segmented<T extends string>({ options, value, onChange }: {
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg bg-surface-2 p-0.5 border border-edge">
+    <div className="inline-flex flex-wrap max-w-full rounded-full bg-surface-container p-1 border border-outline-variant gap-0.5">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
-          className={`px-3 py-1 text-xs rounded-md transition-colors ${
+          className={`px-4 min-h-11 text-xs rounded-full transition-[background,color,transform] duration-200 active:scale-95 ${
             value === o.value
-              ? "bg-surface text-ink shadow-sm font-medium"
-              : "text-ink-muted hover:text-ink-2"
+              ? "bg-primary-container text-on-primary-container shadow-sm font-semibold"
+              : "text-ink-muted hover:text-ink"
           }`}
+          style={{ transitionTimingFunction: "var(--ease-spring)" }}
           aria-pressed={value === o.value}
         >
           {o.label}
         </button>
       ))}
     </div>
+  );
+}
+
+type ButtonVariant = "filled" | "tonal" | "outlined" | "text";
+
+/** Expressive M3 button. Prominent primary action with a large tap target. */
+export function Button({
+  variant = "filled", size, className = "", type = "button", children, ...rest
+}: {
+  variant?: ButtonVariant;
+  size?: "sm";
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  const sizeClass = size === "sm" ? "btn-sm" : "";
+  return (
+    <button type={type} className={`btn btn-${variant} ${sizeClass} ${className}`.trim()} {...rest}>
+      {children}
+    </button>
+  );
+}
+
+/** Expressive assist/filter chip. Set `active` for the selected state. */
+export function Chip({
+  active = false, className = "", type = "button", children, ...rest
+}: {
+  active?: boolean;
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type={type}
+      aria-pressed={active}
+      className={`chip ${active ? "chip-active" : ""} ${className}`.trim()}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Floating action button for a screen's primary task. */
+export function Fab({
+  className = "", type = "button", children, ...rest
+}: ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button type={type} className={`fab ${className}`.trim()} {...rest}>
+      {children}
+    </button>
   );
 }

@@ -1,152 +1,59 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+﻿import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { num } from "../lib/format";
-import { AnimatedNumber, ErrorState, HowItsMade, Skeleton } from "../components/ui";
-
-const AI_EXAMPLES = [
-  "Who are the top five scorers in the NBA this season?",
-  "How has Stephen Curry been playing in his last 10 games?",
-  "Compare Shai Gilgeous-Alexander and Luka Doncic this season",
-  "What are Victor Wembanyama's stats this season?",
-];
+import { AnimatedNumber, ErrorState, Skeleton } from "../components/ui";
+import PlayerAvatar from "../components/PlayerAvatar";
 
 export default function Home({ onSearch }: { onSearch: () => void }) {
-  const navigate = useNavigate();
   const { data: leaders, isLoading, error, refetch } = useQuery({
-    queryKey: ["leaders-home"],
-    queryFn: () => api.leaders({ stat: "PTS", limit: 8 }),
+    queryKey: ["leaders-home"], queryFn: () => api.leaders({ stat: "PTS", limit: 8 }),
   });
   const { data: meta } = useQuery({ queryKey: ["meta"], queryFn: api.meta });
-
   return (
-    <div className="py-6">
-      {/* ---- Cover ---- */}
-      <section className="hero-glow max-w-3xl mx-auto text-center pt-10 pb-12 section-in">
-        <div className="eyebrow mb-3">The season, quantified</div>
-        <h1 className="font-display text-5xl sm:text-6xl font-semibold tracking-tight leading-[1.05]">
-          <span className="block sm:whitespace-nowrap">Explore NBA stats.</span>
-          <span className="block sm:whitespace-nowrap" style={{ color: "var(--series-1)" }}>
-            Investigate what they mean.
-          </span>
-        </h1>
-        <p className="mt-5 text-ink-2 text-base max-w-2xl mx-auto leading-relaxed">
-          Shot charts, dashboards and trends for every player in the league —
-          <br className="hidden sm:block" /> plus a model trained on real NBA shots and an
-          AI analyst that proves every answer with the numbers.
-        </p>
-        {meta && (
-          <p className="mt-3 text-xs text-ink-muted tracking-wide uppercase">
-            Official NBA.com stats · seasons {meta.seasons[meta.seasons.length - 1]} to{" "}
-            {meta.current_season}
-            {meta.data_through && ` · latest game: ${meta.data_through}`}
-          </p>
-        )}
-        <button
-          onClick={onSearch}
-          className="mt-8 w-full max-w-md mx-auto flex items-center gap-3 px-5 py-3.5 rounded-lg border border-edge bg-surface text-ink-muted hover:border-ink-muted transition-colors text-sm"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-            <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Search any current NBA player
-          <kbd className="ml-auto text-[10px] border border-edge rounded px-1.5 py-0.5">Ctrl K</kbd>
+    <div className="space-y-7 sm:space-y-9">
+      <section className="discovery-header section-in">
+        <div className="eyebrow mb-3">Your view of the game</div>
+        <h1 className="font-display text-3xl sm:text-5xl font-extrabold tracking-tight leading-[1.12]">Every player.<br className="sm:hidden" /> A clearer picture.</h1>
+        <p className="text-sm sm:text-base text-ink-2 mt-3 max-w-xl leading-relaxed">Explore performance, compare players, and see the story behind their shots.</p>
+        <button type="button" onClick={onSearch} className="discovery-search mt-5" aria-label="Find an NBA player">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+          <span className="flex-1 text-left">Find an NBA player</span><span aria-hidden="true">→</span>
         </button>
-        {meta && (
-          <p className="mt-2 text-xs text-ink-muted max-w-md mx-auto">
-            {meta.player_lookup_note}
-          </p>
-        )}
+        <p className="text-xs text-ink-muted mt-2">Search current players. Explore their available past seasons.</p>
       </section>
-
-      <div className="rule mb-10" />
-
-      {/* ---- Leaderboard ---- */}
-      <section className="mb-12">
-        <div className="eyebrow mb-4">The leaderboard · points per game</div>
-        <div className="grid sm:grid-cols-2 gap-x-10">
-          {error && (
-            <div className="sm:col-span-2"><ErrorState message={(error as Error).message} onRetry={() => void refetch()} /></div>
-          )}
-          {isLoading &&
-            Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 rounded-md mb-1" />
-            ))}
-          {leaders?.map((l, i) => (
-            <Link
-              key={l.player_id}
-              to={`/player/${l.player_id}`}
-              className="flex items-center gap-4 py-2.5 border-b border-edge hover:bg-surface transition-colors px-2 -mx-2 group"
-            >
-              <span className="font-display text-xl text-ink-muted w-6 text-right shrink-0">
-                {i + 1}
-              </span>
-              <img
-                src={`https://cdn.nba.com/headshots/nba/latest/1040x760/${l.player_id}.png`}
-                alt=""
-                loading="lazy"
-                className="w-11 h-11 rounded-full object-cover bg-surface-2 shrink-0"
-              />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate group-hover:underline underline-offset-2">
-                  {l.name}
-                </div>
-                <div className="text-xs text-ink-muted">{l.team}</div>
-              </div>
-              <div className="text-lg font-semibold shrink-0">
-                <AnimatedNumber value={l.value} format={(n) => num(n)} />
-                <span className="text-[10px] text-ink-muted font-normal ml-1">PPG</span>
-              </div>
-            </Link>
-          ))}
+      <section aria-labelledby="leaders-title">
+        <div className="flex flex-wrap justify-between items-end gap-2 mb-4">
+          <div><div className="eyebrow mb-1">League leaders{meta && ` · ${meta.current_season}`}</div><h2 id="leaders-title" className="font-display text-xl sm:text-2xl font-bold tracking-tight">Leading the scoring.</h2></div>
+          <span className="text-xs text-ink-muted">Points per game</span>
         </div>
-      </section>
-
-      {/* ---- The Model teaser ---- */}
-      <section className="mb-12">
-        <Link
-          to="/model"
-          className="card card-hover p-6 flex flex-wrap items-center gap-5 group block"
-        >
-          <div className="flex-1 min-w-64">
-            <div className="eyebrow mb-1.5">Machine learning</div>
-            <div className="font-display text-2xl font-semibold group-hover:underline underline-offset-4">
-              Player vs the Model
-            </div>
-            <p className="text-sm text-ink-2 mt-1.5 leading-relaxed">
-              Pick any player and see whether they beat a machine trained on
-              hundreds of thousands of real NBA shots. Who makes more than
-              their shots deserve?
-            </p>
-          </div>
-          <span className="text-2xl text-ink-muted group-hover:text-ink transition-colors">→</span>
-        </Link>
-      </section>
-
-      {/* ---- Ask the analyst ---- */}
-      <section>
-        <div className="eyebrow mb-4">Ask the analyst</div>
-        <div className="grid sm:grid-cols-2 gap-3">
-          {AI_EXAMPLES.map((q) => (
-            <button
-              key={q}
-              onClick={() => navigate("/ai", { state: { question: q } })}
-              className="card card-hover p-4 text-left text-sm text-ink-2 hover:text-ink transition-colors"
-            >
-              <span className="mr-2" style={{ color: "var(--series-7)" }}>✦</span>
-              {q}
-            </button>
-          ))}
+        {error && <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />}
+        <div className="grid md:grid-cols-2 gap-x-6 lg:gap-x-10">
+          {isLoading && Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-[76px] mb-1 rounded-xl" />)}
+          {leaders?.map((leader, index) => <Link key={leader.player_id} to={`/player/${leader.player_id}`} className="leader-row group">
+            <span className="w-6 text-sm tnum text-ink-muted shrink-0">{String(index + 1).padStart(2, "0")}</span>
+            <PlayerAvatar playerId={leader.player_id} name={leader.name} className="w-12 h-12" />
+            <div className="min-w-0 flex-1"><div className="text-sm font-semibold truncate group-hover:text-accent transition-colors">{leader.name}</div><div className="text-xs text-ink-muted mt-0.5">{leader.team}</div></div>
+            <div className="text-xl font-display font-bold tnum shrink-0"><AnimatedNumber value={leader.value} format={num} /></div>
+            <span className="text-ink-muted ml-1" aria-hidden="true">↗</span>
+          </Link>)}
         </div>
+        {!isLoading && !error && leaders?.length === 0 && <p className="card p-5 text-sm text-ink-muted">Season leaders are not available yet. Search for a player to explore past seasons.</p>}
       </section>
-
-      <HowItsMade>
-        Player data comes live from NBA.com's official stats through the free
-        nba_api library and is cached in a local SQLite database on this PC.
-        Every number, percentile and chart is computed server side with pandas.
-        Nothing on this page is estimated by AI.
-      </HowItsMade>
+      <section aria-label="Explore the analysis" className="grid sm:grid-cols-3 gap-4">
+        {[
+          { to: "/compare", number: "01", title: "Compare players", text: "Two players. One view. Put their performance side by side.", color: "var(--primary)" },
+          { to: "/model", number: "02", title: "Understand shot quality", text: "Explore actual shooting alongside the model’s estimate for those shots.", color: "var(--secondary)" },
+          { to: "/games", number: "03", title: "Break down a game", text: "Follow the runs, key performances, and numbers behind the result.", color: "var(--tertiary)" },
+        ].map(item => <Link key={item.to} to={item.to} className="card-tonal card-hover p-5 sm:p-6 group">
+          <div className="flex justify-between items-center text-xs mb-6"><span className="tnum font-bold text-sm" style={{ color: item.color }}>{item.number}</span><span aria-hidden="true" style={{ color: item.color }} className="text-base transition-transform duration-200 group-hover:translate-x-0.5">↗</span></div>
+          <h2 className="font-display font-bold text-lg tracking-tight">{item.title}</h2>
+          <p className="text-sm text-ink-2 leading-relaxed mt-2">{item.text}</p>
+        </Link>)}
+      </section>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-edge pt-5 text-sm">
+        <p className="text-ink-muted">Have a specific question about the numbers?</p><Link to="/ai" className="btn btn-tonal btn-sm">Ask AI <span aria-hidden="true">→</span></Link>
+      </div>
     </div>
   );
 }

@@ -11,14 +11,19 @@ export interface ProfileFilters extends Filters {
 const TEAMS = ["ATL","BOS","BKN","CHA","CHI","CLE","DAL","DEN","DET","GSW","HOU","IND","LAC","LAL","MEM","MIA","MIL","MIN","NOP","NYK","OKC","ORL","PHI","PHX","POR","SAC","SAS","TOR","UTA","WAS"];
 
 const selectCls =
-  "bg-surface border border-edge rounded-lg px-2.5 py-1.5 text-xs text-ink outline-none hover:border-ink-muted transition-colors";
+  "bg-surface-container border border-outline-variant rounded-lg px-3 py-2 text-xs text-ink outline-none hover:border-outline transition-colors";
 
-export default function FilterBar({ filters, onChange }: {
+export default function FilterBar({ filters, onChange, showRate = false, showSplits = false }: {
   filters: ProfileFilters;
   onChange: (f: ProfileFilters) => void;
+  showRate?: boolean;
+  showSplits?: boolean;
 }) {
   const { data: meta } = useQuery({ queryKey: ["meta"], queryFn: api.meta });
   const set = (patch: Partial<ProfileFilters>) => onChange({ ...filters, ...patch });
+
+  const activeCount = [filters.location, filters.outcome, filters.starter, filters.last_n, filters.opponent, filters.date_from, filters.date_to]
+    .filter((value) => value !== undefined && value !== "").length;
 
   return (
     <div className="space-y-2.5">
@@ -33,7 +38,7 @@ export default function FilterBar({ filters, onChange }: {
           onChange={(e) => set({ season: e.target.value })}
         >
           {(meta?.seasons ?? [filters.season]).map((s) => (
-            <option key={s} value={s ?? ""}>{s}</option>
+            <option key={s ?? "current"} value={s ?? ""}>{s}</option>
           ))}
         </select>
 
@@ -46,7 +51,7 @@ export default function FilterBar({ filters, onChange }: {
           onChange={(v) => set({ season_type: v })}
         />
 
-        <Segmented
+        {showRate && <Segmented
           options={[
             { value: "per_game" as PerMode, label: "Per game" },
             { value: "per_36" as PerMode, label: "Per 36" },
@@ -55,10 +60,14 @@ export default function FilterBar({ filters, onChange }: {
           ]}
           value={filters.perMode}
           onChange={(v) => set({ perMode: v })}
-        />
+        />}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {showSplits && <details className="group">
+        <summary className="cursor-pointer text-xs text-ink-2 hover:text-ink select-none">
+          Advanced game filters{activeCount ? ` (${activeCount} active)` : ""}
+        </summary>
+      <div className="flex flex-wrap items-center gap-2 pt-3">
         <span className="text-[11px] uppercase tracking-wider text-ink-muted w-14 shrink-0">
           Splits
         </span>
@@ -151,6 +160,7 @@ export default function FilterBar({ filters, onChange }: {
         </button>
       )}
       </div>
+      </details>}
     </div>
   );
 }

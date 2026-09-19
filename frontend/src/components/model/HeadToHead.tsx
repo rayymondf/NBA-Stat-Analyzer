@@ -6,7 +6,9 @@ import type { ComparisonBlock, PlayerBio, PlayerSummary } from "../../lib/types"
 import { num, pct, signed } from "../../lib/format";
 import SearchPalette from "../SearchPalette";
 import ShotChart from "../ShotChart";
-import { Card, CardTitle, ErrorState, GlossaryTip, Skeleton } from "../ui";
+import { Card, CardTitle, ErrorState, GlossaryTip, Segmented, Skeleton } from "../ui";
+import AnalysisPeriod from "./AnalysisPeriod";
+import { useAnalysisPeriod } from "./useAnalysisPeriod";
 
 const A_COLOR = "var(--series-1)";
 const B_COLOR = "var(--series-6)";
@@ -39,153 +41,87 @@ function valueOf(block: ComparisonBlock, row: (typeof ROWS)[number], perMode: "p
   return src?.[row.key] ?? null;
 }
 
-/** Classic two-player head-to-head comparison. */
+function StatsTable({ data, rows, perMode }: { data: { a: ComparisonBlock; b: ComparisonBlock }; rows: typeof ROWS; perMode: "per_game" | "per_75" }) {
+  return (
+    <table className="w-full table-fixed text-xs sm:text-sm">
+      <caption className="sr-only">Player comparison statistics</caption>
+      <thead><tr className="border-b border-edge"><th scope="col" className="text-left py-3 w-[38%]">Metric</th><th scope="col" className="px-1 py-3 break-words" style={{ color: A_COLOR }}>{data.a.info.name ?? "Player A"}</th><th scope="col" className="px-1 py-3 break-words" style={{ color: B_COLOR }}>{data.b.info.name ?? "Player B"}</th></tr></thead>
+      <tbody>{rows.map((row) => {
+        const va = valueOf(data.a, row, perMode);
+        const vb = valueOf(data.b, row, perMode);
+        const lowerBetter = ["TOV", "PF", "def_rating"].includes(row.key);
+        const comparable = va !== null && vb !== null && va !== vb;
+        const aBetter = comparable && (lowerBetter ? va < vb : va > vb);
+        const bBetter = comparable && !aBetter;
+        const total = Math.abs(va ?? 0) + Math.abs(vb ?? 0) || 1;
+        return <tr key={row.key} className="border-b border-edge last:border-0">
+          <th scope="row" className="text-left font-normal text-ink-2 py-3 pr-2"><span>{row.label}</span>{row.tip && <GlossaryTip term={row.tip} />}</th>
+          {([{ value: va, better: aBetter, color: A_COLOR }, { value: vb, better: bBetter, color: B_COLOR }]).map((cell, index) => <td key={index} className={`text-center px-2 py-3 tnum ${cell.better ? "font-bold" : "text-ink-2"}`}>
+            {row.fmt(cell.value)}<div aria-hidden="true" className="h-1 mt-2 rounded-full bg-surface-2 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${Math.abs(cell.value ?? 0) / total * 100}%`, background: cell.color }} /></div>
+          </td>)}
+        </tr>;
+      })}</tbody>
+    </table>
+  );
+}
+
 export default function HeadToHead() {
   const [params, setParams] = useSearchParams();
-  const a = params.get("a") ? Number(params.get("a")) : null;
-  const b = params.get("b") ? Number(params.get("b")) : null;
+  const validId = (value: string | null) => { const id = Number(value); return Number.isSafeInteger(id) && id > 0 ? id : null; };
+  const a = validId(params.get("a"));
+  const b = validId(params.get("b"));
   const [picking, setPicking] = useState<"a" | "b" | null>(null);
   const [perMode, setPerMode] = useState<"per_game" | "per_75">("per_game");
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["compare", a, b],
-    queryFn: () => api.compare(a!, b!),
-    enabled: !!a && !!b,
+  const { filters } = useAnalysisPeriod();
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["compare", a, b, filters.season, filters.season_type],
+    queryFn: () => api.compare(a!, b!, filters), enabled: !!a && !!b,
   });
-
-  // Fetch each slot's bio independently so a picked player shows up right
-  // away, not only once BOTH players are picked and /compare resolves.
-  const { data: infoA } = useQuery({
-    queryKey: ["summary", a],
-    queryFn: () => api.summary(a!),
-    enabled: !!a,
-  });
-  const { data: infoB } = useQuery({
-    queryKey: ["summary", b],
-    queryFn: () => api.summary(b!),
-    enabled: !!b,
-  });
-
+  const summaryA = useQuery({ queryKey: ["summary", a, filters.season, filters.season_type], queryFn: () => api.summary(a!, filters), enabled: !!a });
+  const summaryB = useQuery({ queryKey: ["summary", b, filters.season, filters.season_type], queryFn: () => api.summary(b!, filters), enabled: !!b });
   const setPlayer = (slot: "a" | "b", id: number) => {
     const next = new URLSearchParams(params);
     next.set(slot, String(id));
     setParams(next);
   };
-
   return (
-    <div className="space-y-4">
-      <div className="grid sm:grid-cols-2 gap-4">
-        <PlayerSlot color={A_COLOR} info={data?.a?.info ?? infoA} label="Player A" onPick={() => setPicking("a")} />
-        <PlayerSlot color={B_COLOR} info={data?.b?.info ?? infoB} label="Player B" onPick={() => setPicking("b")} />
+    <div className="space-y-5 min-w-0">
+      <AnalysisPeriod />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
+        <PlayerSlot color={A_COLOR} info={data?.a.info ?? summaryA.data} label="Player A" onPick={() => setPicking("a")} />
+        <PlayerSlot color={B_COLOR} info={data?.b.info ?? summaryB.data} label="Player B" onPick={() => setPicking("b")} />
       </div>
-
-      {!a || !b ? (
-        <Card className="text-center py-12 text-ink-muted text-sm">
-          Pick two players to compare their stats, efficiency and shot profiles side by side.
-        </Card>
-      ) : isLoading ? (
-        <div className="space-y-3"><Skeleton className="h-64 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>
-      ) : error ? (
-        <ErrorState message={(error as Error).message} />
-      ) : data ? (
-        <>
-          <Card>
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-              <CardTitle>Head to head · {data.season}</CardTitle>
-              <div className="flex gap-1 text-xs">
-                {(["per_game", "per_75"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setPerMode(m)}
-                    className={`px-2.5 py-1 rounded-md border transition-colors ${
-                      perMode === m ? "border-ink-muted text-ink font-medium" : "border-edge text-ink-muted"
-                    }`}
-                  >
-                    {m === "per_game" ? "Per game" : "Per 75"}
-                  </button>
-                ))}
-                <GlossaryTip term="PER_75" />
-              </div>
+      {(summaryA.isError || summaryB.isError) && <ErrorState message="Some player details are unavailable." onRetry={() => { void summaryA.refetch(); void summaryB.refetch(); }} />}
+      {!a || !b ? <Card className="text-center py-12"><h2 className="font-display font-bold text-xl">Choose your matchup</h2><p className="text-sm text-ink-muted mt-2">Pick two players to compare their stats, efficiency and shot profiles.</p></Card>
+        : isLoading ? <div className="space-y-3"><Skeleton className="h-64 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>
+        : error ? <ErrorState message={error.message} onRetry={() => void refetch()} />
+        : data ? <>
+          <Card className="min-w-0">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <CardTitle>{data.season} · {data.season_type}</CardTitle>
+              <div className="flex items-center gap-1"><Segmented options={[{ value: "per_game", label: "Per game" }, { value: "per_75", label: "Per 75" }]} value={perMode} onChange={setPerMode} /><GlossaryTip term="PER_75" /></div>
             </div>
-            <div className="overflow-x-auto">
-            <div className="space-y-1.5 min-w-[640px]">
-              {ROWS.map((row) => {
-                const va = valueOf(data.a, row, perMode);
-                const vb = valueOf(data.b, row, perMode);
-                if (va === null && vb === null) return null;
-                const lowerBetter = ["Turnovers", "Fouls", "Def. rating"].includes(row.label);
-                const total = Math.abs(va ?? 0) + Math.abs(vb ?? 0) || 1;
-                const aBetter = lowerBetter ? (va ?? 0) < (vb ?? 0) : (va ?? 0) > (vb ?? 0);
-                return (
-                  <div key={row.label} className="grid grid-cols-[70px_1fr_130px_1fr_70px] items-center gap-2 text-xs">
-                    <span className={`tnum text-right ${aBetter ? "font-bold" : "text-ink-2"}`}>{row.fmt(va)}</span>
-                    <div className="h-2 rounded-full bg-surface-2 overflow-hidden flex justify-end">
-                      <div className="bar-fill h-full rounded-full" style={{ width: `${(Math.abs(va ?? 0) / total) * 100}%`, background: A_COLOR }} />
-                    </div>
-                    <span className="text-center text-ink-muted flex items-center justify-center gap-1">
-                      {row.label}{row.tip && <GlossaryTip term={row.tip} />}
-                    </span>
-                    <div className="h-2 rounded-full bg-surface-2 overflow-hidden">
-                      <div className="bar-fill h-full rounded-full" style={{ width: `${(Math.abs(vb ?? 0) / total) * 100}%`, background: B_COLOR }} />
-                    </div>
-                    <span className={`tnum ${!aBetter ? "font-bold" : "text-ink-2"}`}>{row.fmt(vb)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            </div>
+            <p className="text-xs text-ink-muted">Games: {data.a.info.name ?? "Player A"} {data.a.stats.games} · {data.b.info.name ?? "Player B"} {data.b.stats.games}</p>
+            {data.a.stats.games === 0 && data.b.stats.games === 0 && <p className="text-sm text-ink-muted mt-3">No games available for either player in this period.</p>}
+            <StatsTable data={data} rows={ROWS.slice(0, 3)} perMode={perMode} />
+            <details className="border-t border-edge mt-3 pt-3"><summary className="cursor-pointer font-semibold text-sm py-2">Advanced stats & efficiency</summary><StatsTable data={data} rows={ROWS.slice(3)} perMode={perMode} /></details>
+            <p className="text-xs text-ink-muted mt-4">Bold indicates a category edge when both values are available. Lower is favored for turnovers, fouls and defensive rating. Role, volume and team context still matter.</p>
           </Card>
-
-          <div className="grid md:grid-cols-2 gap-4">
-            {(["a", "b"] as const).map((slot) => (
-              <Card key={slot}>
-                <CardTitle>
-                  <span style={{ color: slot === "a" ? A_COLOR : B_COLOR }}>●</span>{" "}
-                  {data[slot].info?.name}: shot chart
-                </CardTitle>
-                <ShotChart points={data[slot].shot_points ?? []} zones={data[slot].zones ?? []} defaultView="zones" height={360} />
-              </Card>
-            ))}
-          </div>
-          <p className="text-[11px] text-ink-muted">
-            Bold value = better in that category (turnovers, fouls and defensive rating: lower is better).
-            A category edge doesn't make a player universally better; check volume, role and position context.
-          </p>
-        </>
-      ) : null}
-
-      <SearchPalette
-        open={picking !== null}
-        onClose={() => setPicking(null)}
-        onPick={(pid) => picking && setPlayer(picking, pid)}
-      />
+          <div className="grid md:grid-cols-2 gap-4 min-w-0">{(["a", "b"] as const).map((slot) => <Card key={slot} className="min-w-0">
+            <CardTitle>{slot === "a" ? "Player A" : "Player B"} · {data[slot].info.name}: shot chart</CardTitle>
+            {data[slot].shot_points.length ? <ShotChart points={data[slot].shot_points} zones={data[slot].zones ?? []} defaultView="zones" height={360} /> : <p className="text-sm text-ink-muted py-10">No shot data for this player and period.</p>}
+          </Card>)}</div>
+        </> : null}
+      <SearchPalette open={picking !== null} onClose={() => setPicking(null)} onPick={(id) => { if (picking) setPlayer(picking, id); }} />
     </div>
   );
 }
 
-function PlayerSlot({ info, label, color, onPick }: {
-  info?: PlayerBio | PlayerSummary;
-  label: string;
-  color: string;
-  onPick: () => void;
-}) {
+function PlayerSlot({ info, label, color, onPick }: { info?: PlayerBio | PlayerSummary; label: string; color: string; onPick: () => void }) {
   return (
-    <button onClick={onPick} className="card p-4 flex items-center gap-3 hover:border-ink-muted transition-colors text-left">
-      {info ? (
-        <>
-          <img src={info.headshot} alt="" className="w-14 h-14 rounded-full object-cover bg-surface-2" />
-          <div>
-            <div className="text-sm font-semibold" style={{ color }}>{info.name}</div>
-            <div className="text-xs text-ink-muted">{info.team ?? "-"} · {info.position ?? "-"}</div>
-            <div className="text-[10px] text-ink-muted mt-0.5 underline underline-offset-2">Change player</div>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="w-14 h-14 rounded-full bg-surface-2 grid place-items-center text-ink-muted text-xl">+</div>
-          <div className="text-sm text-ink-muted">{label}: click to choose</div>
-        </>
-      )}
+    <button onClick={onPick} aria-label={`${label}: ${info?.name ?? "choose player"}`} className="card min-w-0 p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3 hover:border-ink-muted transition-colors text-left">
+      {info ? <img src={info.headshot} alt="" className="w-12 h-12 rounded-full object-cover bg-surface-2" /> : <span className="w-12 h-12 rounded-full bg-surface-2 grid place-items-center text-xl">+</span>}
+      <span className="min-w-0"><span className="block text-xs text-ink-muted mb-1">{label}</span><span className="block text-sm font-bold break-words" style={{ color }}>{info?.name ?? "Choose player"}</span>{info && <span className="block text-xs text-ink-muted mt-1">{info.team ?? "?"} · {info.position ?? "?"}</span>}<span className="block text-xs underline underline-offset-2 mt-2">{info ? "Change player" : "Search players"}</span></span>
     </button>
   );
 }

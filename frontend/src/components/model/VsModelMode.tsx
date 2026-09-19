@@ -1,222 +1,99 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api, type ShotPoint } from "../../lib/api";
-import type { ModelAvailable, ModelInfo } from "../../lib/types";
+import { api, type Filters } from "../../lib/api";
 import SearchPalette from "../SearchPalette";
 import ShotChart from "../ShotChart";
-import { AnimatedNumber, Card, CardTitle, ErrorState, GlossaryTip, Segmented, Skeleton } from "../ui";
+import { AnimatedNumber, Card, CardTitle, ErrorState, Segmented, Skeleton } from "../ui";
 import DeltaHistogram from "./DeltaHistogram";
-import CalibrationChart from "./CalibrationChart";
 import ZoneDeltaBars from "./ZoneDeltaBars";
+import AnalysisPeriod from "./AnalysisPeriod";
+import { useAnalysisPeriod } from "./useAnalysisPeriod";
+import ShotDifficultyExplainer from "./ShotDifficultyExplainer";
 
-function isModelAvailable(info: ModelInfo | undefined): info is ModelAvailable {
-  return info?.available === true;
-}
-
-/** The player's real shot chart with adjustable views and filters. */
-function ShotSelectionCard({ playerId, name }: { playerId: number; name?: string }) {
+function ShotSelectionCard({ playerId, name, filters }: { playerId: number; name?: string; filters: Filters }) {
   const [result, setResult] = useState<"all" | "made" | "missed">("all");
-  const { data } = useQuery({
-    queryKey: ["shooting", playerId, undefined, undefined],
-    queryFn: () => api.shooting(playerId, {}),
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["shooting", playerId, filters.season, filters.season_type],
+    queryFn: () => api.shooting(playerId, { ...filters }),
     staleTime: 30 * 60 * 1000,
   });
-
-  const points: ShotPoint[] = useMemo(() => {
-    let pts = data?.points ?? [];
-    if (result !== "all") pts = pts.filter((p: ShotPoint) => p.made === (result === "made"));
-    return pts;
-  }, [data, result]);
-
-  if (!data?.points?.length) return null;
+  const points = useMemo(() => (data?.points ?? []).filter((point) => result === "all" || point.made === (result === "made")), [data, result]);
+  if (isLoading) return <Skeleton className="h-80 rounded-lg" />;
+  if (error) return <ErrorState message={error.message} onRetry={() => void refetch()} />;
   return (
-    <Card className="section-in">
+    <Card className="min-w-0">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <CardTitle>{name ? `${name}'s shot selection` : "Shot selection"}</CardTitle>
-        <Segmented
-          options={[
-            { value: "all" as const, label: "All shots" },
-            { value: "made" as const, label: "Makes" },
-            { value: "missed" as const, label: "Misses" },
-          ]}
-          value={result}
-          onChange={(value) => setResult(value)}
-        />
+        <Segmented options={[{ value: "all", label: "All shots" }, { value: "made", label: "Makes" }, { value: "missed", label: "Misses" }]} value={result} onChange={setResult} />
       </div>
-      <ShotChart points={points} zones={data.zones ?? []} defaultView="dots" height={420} />
-      <p className="text-[11px] text-ink-muted mt-2">
-        These are the exact shots the model grades: every dot's position, distance
-        and type is what the model uses to compute this player's expected
-        effective field goal %.
-        Zones view colors each area blue (better than league average) to red (worse).
-      </p>
+      {points.length ? <ShotChart points={points} zones={data?.zones ?? []} defaultView="dots" height={420} /> : <p className="text-sm text-ink-muted py-8">No shots match this view.</p>}
+      <p className="text-xs text-ink-muted mt-2">Shots from the selected period. Zone colors compare actual field-goal percentage with the league average.</p>
     </Card>
   );
 }
 
-/** Pick one player; the model plays the "average NBA player" taking the same shots. */
 export default function VsModelMode() {
   const [params, setParams] = useSearchParams();
-  const playerId = params.get("player") ? Number(params.get("player")) : null;
+  const rawId = Number(params.get("player"));
+  const playerId = Number.isSafeInteger(rawId) && rawId > 0 ? rawId : null;
   const [picking, setPicking] = useState(false);
-
-  const { data: summary } = useQuery({
-    queryKey: ["summary", playerId],
-    queryFn: () => api.summary(playerId!),
-    enabled: !!playerId,
+  const { filters } = useAnalysisPeriod();
+  const summary = useQuery({
+    queryKey: ["summary", playerId, filters.season, filters.season_type],
+    queryFn: () => api.summary(playerId!, filters), enabled: !!playerId,
   });
-  const { data: quality, isLoading, error } = useQuery({
-    queryKey: ["shotQuality", playerId],
-    queryFn: () => api.shotQuality(playerId!),
-    enabled: !!playerId,
-    staleTime: 30 * 60 * 1000,
+  const { data: quality, isLoading, error, refetch } = useQuery({
+    queryKey: ["shotQuality", playerId, filters.season, filters.season_type],
+    queryFn: () => api.shotQuality(playerId!, filters), enabled: !!playerId, staleTime: 30 * 60 * 1000,
   });
-  const { data: info } = useQuery({
-    queryKey: ["modelInfo"],
-    queryFn: api.modelInfo,
-    staleTime: 30 * 60 * 1000,
-  });
-  const modelInfo = isModelAvailable(info) ? info : null;
-
-  const bio = summary; // summary endpoint returns bio fields at the top level
+  const model = useQuery({ queryKey: ["modelInfo"], queryFn: api.modelInfo, staleTime: 30 * 60 * 1000 });
+  const modelInfo = model.data?.available ? model.data : null;
+  const bio = summary.data;
   const name = bio?.name ?? undefined;
-
   const pickPlayer = (id: number) => {
     const next = new URLSearchParams(params);
     next.set("player", String(id));
     setParams(next);
   };
-
   return (
-    <div className="space-y-4">
-      <button
-        onClick={() => setPicking(true)}
-        className="card p-4 flex items-center gap-3 hover:border-ink-muted transition-colors text-left w-full sm:w-auto sm:min-w-80"
-      >
-        {bio ? (
-          <>
-            <img src={bio.headshot} alt="" className="w-14 h-14 rounded-full object-cover bg-surface-2" />
-            <div>
-              <div className="text-sm font-semibold">{bio.name}</div>
-              <div className="text-xs text-ink-muted">
-                {bio.team ?? "-"} · {bio.position ?? "-"}
-              </div>
-              <div className="text-[10px] text-ink-muted mt-0.5 underline underline-offset-2">
-                Change player
-              </div>
+    <div className="space-y-5 min-w-0">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <button onClick={() => setPicking(true)} className="card p-4 flex items-center gap-3 hover:border-ink-muted transition-colors text-left w-full sm:w-auto sm:min-w-80" aria-label={playerId ? "Change player" : "Choose player"}>
+          {bio ? <img src={bio.headshot} alt="" className="w-14 h-14 rounded-full object-cover bg-surface-2" /> : <span className="w-14 h-14 rounded-full bg-surface-2 grid place-items-center text-xl">+</span>}
+          <div><div className="text-base font-semibold">{name ?? (playerId ? `Player ${playerId}` : "Choose a player")}</div><div className="text-xs text-ink-muted mt-1">{bio ? `${bio.team ?? "—"} · ${bio.position ?? "—"}` : "Explore actual and expected shooting"}</div>{playerId && <span className="text-xs underline underline-offset-2">Change player</span>}</div>
+        </button>
+        <AnalysisPeriod />
+      </div>
+      {summary.isError && <ErrorState message="Player details are unavailable." onRetry={() => void summary.refetch()} />}
+      {!playerId ? <Card className="py-12 text-center"><h2 className="font-display text-xl font-bold">Start with a player's shots</h2><p className="text-sm text-ink-muted mt-2">Choose a player and period to see actual shooting, the model estimate and the difference.</p></Card>
+        : isLoading ? <div className="space-y-3"><Skeleton className="h-40 rounded-lg" /><Skeleton className="h-64 rounded-lg" /></div>
+        : error ? <ErrorState message={error.message} onRetry={() => void refetch()} />
+        : quality && !quality.available ? <Card><h2 className="font-semibold">Shot quality unavailable</h2><p className="text-sm text-ink-muted mt-2">{quality.reason}</p></Card>
+        : quality ? <>
+          <Card>
+            <CardTitle tip="XFG">Actual vs expected · {quality.season} · {quality.season_type}</CardTitle>
+            <div className="grid sm:grid-cols-3 gap-5">
+              <div><div className="text-xs text-ink-muted mb-2">Actual effective FG%</div><div className="text-4xl font-display font-bold"><AnimatedNumber value={quality.actual_efg * 100} format={(n) => `${n.toFixed(1)}%`} /></div></div>
+              <div><div className="text-xs text-ink-muted mb-2">Model expected effective FG%</div><div className="text-4xl font-display font-bold text-ink-2"><AnimatedNumber value={quality.expected_efg * 100} format={(n) => `${n.toFixed(1)}%`} /></div></div>
+              <div><div className="text-xs text-ink-muted mb-2">Estimated adjusted difference</div><div className="text-3xl font-display font-bold tnum" style={{ color: quality.delta >= 0 ? "var(--good)" : "var(--critical)" }}>{quality.delta > 0 ? "+" : ""}{(quality.delta * 100).toFixed(1)} <span className="text-sm">pp</span></div><p className="text-xs text-ink-muted mt-2">{quality.delta_per_100_shots > 0 ? "+" : ""}{quality.delta_per_100_shots} points per 100 shots</p></div>
             </div>
-          </>
-        ) : (
-          <>
-            <div className="w-14 h-14 rounded-full bg-surface-2 grid place-items-center text-ink-muted text-xl">+</div>
-            <div className="text-sm text-ink-muted">Pick a player to test against the model</div>
-          </>
-        )}
-      </button>
-
-      {!playerId ? (
-        <Card className="text-center py-12 text-ink-muted text-sm">
-          Choose any player. The model then plays the part of an average NBA
-          player taking that player's exact shots, and we see who shoots better.
-        </Card>
-      ) : isLoading ? (
-        <div className="space-y-3">
-          <Skeleton className="h-40 rounded-lg" />
-          <Skeleton className="h-64 rounded-lg" />
-        </div>
-      ) : error ? (
-        <ErrorState message={(error as Error).message} />
-      ) : quality && !quality.available ? (
-        <Card className="text-center py-10 text-ink-muted text-sm">{quality.reason}</Card>
-      ) : quality ? (
-        <>
-          <Card className="section-in">
-            <CardTitle tip="XFG">
-              {name ?? "Player"} vs the model · {quality.season}
-            </CardTitle>
-            <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
-              <div>
-                <div className="text-3xl font-semibold tnum">
-                  <AnimatedNumber value={quality.actual_efg * 100} format={(n) => `${n.toFixed(1)}%`} />
-                </div>
-                <div className="text-[11px] uppercase tracking-wider text-ink-muted mt-1">
-                  {name ? `${name}'s actual effective field goal %` : "Actual effective field goal %"}
-                </div>
-              </div>
-              <div>
-                <div className="text-3xl font-semibold tnum text-ink-2">
-                  <AnimatedNumber value={quality.expected_efg * 100} format={(n) => `${n.toFixed(1)}%`} />
-                </div>
-                <div className="text-[11px] uppercase tracking-wider text-ink-muted mt-1 flex items-center gap-1">
-                  Same shots, average player's expected effective field goal % <GlossaryTip term="XFG" />
-                </div>
-              </div>
-              <div>
-                <span
-                  className="text-sm font-semibold tnum px-2.5 py-1 rounded-full text-white"
-                  style={{
-                    background:
-                      quality.delta >= 0.005 ? "var(--good)" :
-                      quality.delta <= -0.005 ? "var(--critical)" : "var(--ink-muted)",
-                  }}
-                >
-                  {quality.delta > 0 ? "+" : ""}{(quality.delta * 100).toFixed(1)} pts
-                </span>
-                <div className="text-[11px] text-ink-muted mt-1.5">
-                  {quality.delta_per_100_shots > 0 ? "+" : ""}
-                  {quality.delta_per_100_shots} points per 100 shots
-                </div>
-                {quality.confidence_interval_95 && (
-                  <div className="text-[11px] text-ink-muted mt-1">
-                    95% interval: {quality.confidence_interval_95[0] > 0 ? "+" : ""}
-                    {(quality.confidence_interval_95[0] * 100).toFixed(1)} to {quality.confidence_interval_95[1] > 0 ? "+" : ""}
-                    {(quality.confidence_interval_95[1] * 100).toFixed(1)} pts
-                  </div>
-                )}
-              </div>
-              <div className="text-xs text-ink-2 max-w-56 leading-relaxed">
-                {quality.percentile != null ? (
-                  <>Shot-making better than <strong>{quality.percentile}%</strong> of
-                  qualified NBA players, on {quality.shots.toLocaleString()} shots.</>
-                ) : (
-                  <>{quality.shots.toLocaleString()} shots analyzed.</>
-                )}
-              </div>
+            <div className="border-t border-edge mt-5 pt-4 text-sm flex flex-wrap gap-x-6 gap-y-2">
+              <span><strong className="tnum">{quality.shots.toLocaleString()}</strong> shots analyzed</span>
+              {quality.confidence_interval_95 ? <span>95% interval: <strong className="tnum">{(quality.confidence_interval_95[0] * 100).toFixed(1)} to {(quality.confidence_interval_95[1] * 100).toFixed(1)} pp</strong></span> : <span className="text-ink-muted">Confidence interval unavailable</span>}
+              {quality.percentile != null && <span>Model residual percentile: {quality.percentile}</span>}
             </div>
-            {quality.uncertainty_note && (
-              <p className="text-[11px] text-ink-muted leading-relaxed mt-4 max-w-3xl">
-                {quality.uncertainty_note}
-              </p>
-            )}
+            <p className="text-xs text-ink-muted leading-relaxed mt-3">{quality.uncertainty_note ?? "The adjusted difference may be shrunk toward the average to account for sample size."} This estimate includes unmeasured context and uncertainty; it does not isolate shooting skill.</p>
+            <p className="text-xs text-ink-muted mt-2">Model {quality.model.model_version ?? "version unavailable"} · Dataset {quality.model.dataset_version ?? "version unavailable"}</p>
           </Card>
-
-          <div className="grid lg:grid-cols-2 gap-4">
-            <Card className="section-in">
-              <CardTitle>Where they land in the league</CardTitle>
-              <DeltaHistogram
-                distribution={modelInfo?.delta_distribution ?? []}
-                playerDelta={quality.delta}
-                playerName={name}
-              />
-            </Card>
-            <Card className="section-in">
-              <CardTitle>Zone by zone: actual vs expected</CardTitle>
-              <ZoneDeltaBars zones={quality.zones ?? []} />
-            </Card>
-          </div>
-
-          <ShotSelectionCard playerId={playerId} name={name} />
-
-          {(modelInfo?.calibration_by_distance?.length ?? 0) > 0 && (
-            <Card className="section-in">
-              <CardTitle>Can you trust the model? Predicted vs real make rates</CardTitle>
-              <CalibrationChart rows={modelInfo?.calibration_by_distance ?? []} />
-            </Card>
-          )}
-        </>
-      ) : null}
-
+          <Card><CardTitle>Zone by zone: actual vs expected</CardTitle>{quality.zones.length ? <ZoneDeltaBars zones={quality.zones} /> : <p className="text-sm text-ink-muted">Zone estimates unavailable for this period.</p>}</Card>
+          <ShotSelectionCard playerId={playerId} name={name} filters={filters} />
+          <Card><CardTitle>League reference distribution</CardTitle>
+            {model.isLoading ? <Skeleton className="h-48" /> : model.error ? <ErrorState message={model.error.message} onRetry={() => void model.refetch()} /> : modelInfo?.delta_distribution?.length ? <DeltaHistogram distribution={modelInfo.delta_distribution} playerDelta={quality.delta} playerName={name} /> : <p className="text-sm text-ink-muted">League reference distribution unavailable.</p>}
+            <p className="text-xs text-ink-muted mt-2">Reference seasons: {modelInfo?.seasons?.join(", ") || "unavailable"}. The reference population can differ from your selected period.</p>
+          </Card>
+          <details className="card p-5"><summary className="cursor-pointer font-semibold">What drives the model estimate?</summary><div className="mt-4"><ShotDifficultyExplainer playerId={playerId} filters={filters} /></div></details>
+        </> : null}
       <SearchPalette open={picking} onClose={() => setPicking(false)} onPick={pickPlayer} />
     </div>
   );

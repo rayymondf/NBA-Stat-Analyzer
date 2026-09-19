@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -8,19 +8,52 @@ import { Card, CardTitle, ErrorState, GlossaryTip, HowItsMade, PageHeader, Skele
 const TEAMS = ["","ATL","BOS","BKN","CHA","CHI","CLE","DAL","DEN","DET","GSW","HOU","IND","LAC","LAL","MEM","MIA","MIL","MIN","NOP","NYK","OKC","ORL","PHI","PHX","POR","SAC","SAS","TOR","UTA","WAS"];
 
 const PAGE = 50;
-const selectCls = "bg-surface border border-edge rounded-lg px-2.5 py-1.5 text-xs outline-none";
+const selectCls = "bg-surface-container border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs outline-none hover:border-outline transition-colors";
 
 export default function GamesPage() {
-  const [params] = useSearchParams();
-  const [season, setSeason] = useState<string>("");
-  const [team, setTeam] = useState("");
-  const [seasonType, setSeasonType] = useState("Regular Season");
-  const [dateFilter, setDateFilter] = useState("");
+  const [params, setParams] = useSearchParams();
+  const requestedSeason = params.get("season") ?? "";
+  const requestedTeam = params.get("team") ?? "";
+  const requestedType = params.get("type") ?? "Regular Season";
+  const requestedDate = params.get("date") ?? "";
+  const season = /^\d{4}-\d{2}$/.test(requestedSeason) ? requestedSeason : "";
+  const team = TEAMS.includes(requestedTeam) ? requestedTeam : "";
+  const seasonType = requestedType === "Playoffs" ? "Playoffs" : "Regular Season";
+  const dateFilter = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : "";
   const [visible, setVisible] = useState(PAGE);
-  const [selected, setSelected] = useState<string | null>(params.get("game"));
+  const selected = params.get("game")?.trim() || null;
+  const listRef = useRef<HTMLDivElement>(null);
 
   const { data: meta } = useQuery({ queryKey: ["meta"], queryFn: api.meta });
   const activeSeason = season || meta?.current_season || "";
+
+  useEffect(() => {
+    if (requestedSeason && meta && !meta.seasons.includes(requestedSeason)) {
+      setParams((current) => {
+        current.delete("season");
+        return current;
+      }, { replace: true });
+    }
+  }, [meta, requestedSeason, setParams]);
+
+  const updateFilters = (changes: Record<string, string | null>) => {
+    setParams((current) => {
+      Object.entries(changes).forEach(([key, value]) => {
+        if (value) current.set(key, value);
+        else current.delete(key);
+      });
+      return current;
+    });
+    setVisible(PAGE);
+  };
+
+  const selectGame = (gameId: string | null) => {
+    setParams((current) => {
+      if (gameId) current.set("game", gameId);
+      else current.delete("game");
+      return current;
+    });
+  };
 
   // One cached backend call returns the whole season schedule; filter + page
   // entirely client-side (no extra API requests when the user changes filters).
@@ -44,8 +77,6 @@ export default function GamesPage() {
 
   const shown = filtered.slice(0, visible);
 
-  const resetPaging = () => setVisible(PAGE);
-
   return (
     <div>
       <PageHeader
@@ -54,20 +85,22 @@ export default function GamesPage() {
         dek="Pick any completed game and get a ranked, evidence-based explanation of why it was won and lost."
       />
       <div className="grid lg:grid-cols-[340px_1fr] gap-4 items-start">
-      <Card className="!p-0 overflow-hidden">
+      <Card className={`!p-0 overflow-hidden ${selected ? "hidden lg:block" : ""}`}>
         <div className="p-3 border-b border-edge space-y-2">
           <div className="flex gap-2">
             <select
+              aria-label="Season"
               className={`${selectCls} flex-1`}
               value={activeSeason}
-              onChange={(e) => { setSeason(e.target.value); resetPaging(); }}
+              onChange={(e) => updateFilters({ season: e.target.value })}
             >
               {(meta?.seasons ?? []).map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <select
+              aria-label="Season type"
               className={selectCls}
               value={seasonType}
-              onChange={(e) => { setSeasonType(e.target.value); resetPaging(); }}
+              onChange={(e) => updateFilters({ type: e.target.value === "Playoffs" ? "Playoffs" : null })}
             >
               <option>Regular Season</option>
               <option>Playoffs</option>
@@ -75,25 +108,27 @@ export default function GamesPage() {
           </div>
           <div className="flex gap-2">
             <select
+              aria-label="Team"
               className={`${selectCls} flex-1`}
               value={team}
-              onChange={(e) => { setTeam(e.target.value); resetPaging(); }}
+              onChange={(e) => updateFilters({ team: e.target.value || null })}
             >
               <option value="">All teams</option>
               {TEAMS.filter(Boolean).map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
             <input
+              aria-label="Game date"
               type="date"
               className={selectCls}
               value={dateFilter}
-              onChange={(e) => { setDateFilter(e.target.value); resetPaging(); }}
+              onChange={(e) => updateFilters({ date: e.target.value || null })}
               title="Jump to a date"
             />
           </div>
           {dateFilter && (
             <button
               className="text-[11px] text-ink-muted hover:text-ink underline underline-offset-2"
-              onClick={() => { setDateFilter(""); resetPaging(); }}
+              onClick={() => updateFilters({ date: null })}
             >
               Clear date
             </button>
@@ -111,7 +146,7 @@ export default function GamesPage() {
           )}
         </div>
 
-        <div className="max-h-[62vh] overflow-y-auto">
+        <div ref={listRef} className="max-h-[62vh] overflow-y-auto" tabIndex={-1}>
           {error && (
             <div className="p-3"><ErrorState message={(error as Error).message} onRetry={() => void refetch()} /></div>
           )}
@@ -124,9 +159,10 @@ export default function GamesPage() {
           {shown.map((g) => (
             <button
               key={g.game_id}
-              onClick={() => setSelected(g.game_id)}
+              onClick={() => selectGame(g.game_id)}
+              aria-current={selected === g.game_id ? "page" : undefined}
               className={`w-full p-3 text-left border-b border-edge last:border-0 transition-colors ${
-                selected === g.game_id ? "bg-surface-2" : "hover:bg-surface-2"
+                selected === g.game_id ? "bg-surface-container ring-1 ring-inset ring-[var(--primary)]" : "hover:bg-surface-container"
               }`}
             >
               <div className="text-[11px] text-ink-muted">{String(g.date).slice(0, 10)}</div>
@@ -152,14 +188,19 @@ export default function GamesPage() {
         </div>
       </Card>
 
+      <div className={selected ? "block" : "hidden lg:block"}>
       {selected ? (
-        <Investigation gameId={selected} />
+        <Investigation gameId={selected} onBack={() => {
+          selectGame(null);
+          requestAnimationFrame(() => listRef.current?.focus());
+        }} />
       ) : (
         <Card className="text-center py-16 text-ink-muted text-sm">
           Pick a completed game to see why it was won and lost:
           shooting, turnovers, runs, stars and fourth-quarter execution, ranked by evidence.
         </Card>
       )}
+      </div>
       </div>
       <HowItsMade>
         Game investigations are pure statistics, no AI. The app pulls the
@@ -172,7 +213,7 @@ export default function GamesPage() {
   );
 }
 
-function Investigation({ gameId }: { gameId: string }) {
+function Investigation({ gameId, onBack }: { gameId: string; onBack: () => void }) {
   const navigate = useNavigate();
   const { data, isLoading, error } = useQuery({
     queryKey: ["investigate", gameId],
@@ -196,6 +237,9 @@ function Investigation({ gameId }: { gameId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
+        <button onClick={onBack} className="lg:hidden text-xs text-ink-muted hover:text-ink underline underline-offset-2">
+          Back to games
+        </button>
         <h2 className="text-lg font-bold">Final: {data.final}</h2>
         <button
           onClick={() => navigate("/ai", {

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
-  AnimatedNumber, Card, CardTitle, EmptyState, ErrorState, GlossaryTip,
+  AnimatedNumber, Button, Card, CardTitle, Chip, EmptyState, ErrorState, GlossaryTip,
   HowItsMade, PageHeader, PercentileBar, Segmented, Skeleton, SkeletonCard,
   StatTile,
 } from "./ui";
@@ -30,6 +30,35 @@ describe("shared UI contracts", () => {
     />);
     fireEvent.click(screen.getByRole("button", { name: "Expected" }));
     expect(onChange).toHaveBeenCalledWith("expected");
+  });
+
+  it("marks the active segment with aria-pressed", () => {
+    render(<Segmented
+      options={[{ value: "a", label: "A" }, { value: "b", label: "B" }]}
+      value="a"
+      onChange={() => undefined}
+    />);
+    expect(screen.getByRole("button", { name: "A" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "B" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("renders an expressive button that fires clicks", () => {
+    const onClick = vi.fn();
+    render(<Button variant="filled" onClick={onClick}>Search</Button>);
+    const btn = screen.getByRole("button", { name: "Search" });
+    expect(btn).toHaveClass("btn", "btn-filled");
+    expect(btn).toHaveAttribute("type", "button");
+    fireEvent.click(btn);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("reflects chip selected state via aria-pressed and class", () => {
+    const { rerender } = render(<Chip active={false}>Guards</Chip>);
+    const chip = screen.getByRole("button", { name: "Guards" });
+    expect(chip).toHaveClass("chip");
+    expect(chip).toHaveAttribute("aria-pressed", "false");
+    rerender(<Chip active>Guards</Chip>);
+    expect(screen.getByRole("button", { name: "Guards" })).toHaveClass("chip-active");
   });
 
   it("shows glossary content on focus", () => {
