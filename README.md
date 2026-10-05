@@ -147,12 +147,6 @@ npm test
 npm run build
 ```
 
-Or run the repository skill:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .agents\skills\nba-release-readiness\scripts\verify.ps1 -Container
-```
-
 The Locust workload is opt-in because it targets a running service:
 
 ```powershell
@@ -188,28 +182,27 @@ statistics refresh interval.
 
 ## Project agents and skills
 
-The repo contains local Codex configuration so repeated engineering work uses
-the same standards:
+The repo ships a set of **task-focused agents** in `.kiro/agents/` — each owns
+one precise task (not a broad role), with least-privilege tools and scoped write
+paths:
 
-- Agents: code mapping, API review, ML evaluation, performance profiling,
-  frontend quality, security review, release verification, and portfolio review
-  in `.codex/agents/`.
-- Skills: pipeline changes, xFG evaluation, cross-layer feature delivery,
-  release readiness, performance budgets, security audits, UI quality, and
-  portfolio evidence in `.agents/skills/`.
-- Instructions: root and directory-specific `AGENTS.md` files.
+- `nba-data-scraper` — resumable NBA.com ingestion into verified Parquet.
+- `web-researcher` — one scoped, cited external lookup (read-only).
+- `bug-efficiency-validator` — read-only defect and efficiency review.
+- `api-contract-verifier` — keep OpenAPI and the TS client types in sync.
+- `ml-model-evaluator` — leakage/calibration/gate review of an xFG candidate.
+- `live-ui-auditor` — drive the running app, verify the four journeys work.
+- `ui-design-validator` — visual-design critique vs Material Design.
+- `feature-test-author` — offline tests for one feature or bug.
+- `docs-progress-tracker` — keep progress docs current.
 
-For cross-layer work, map the request/data/UI path with `code_mapper`, assign
-non-overlapping implementation files to task-focused agents, then use the API,
-ML, and frontend reviewers where their boundaries changed. The primary agent
-integrates contracts and runs the release gate. Use browser or external MCP
-tools for a specific evidence gap; local code and offline tests remain the source
-of truth for this repository.
+The workflow that coordinates them — when to use which, the review DAG, and the
+verification gate — is the `.kiro/skills/nba-agent-workflow` skill. Root and
+directory-specific `AGENTS.md` files carry the engineering standards and code
+review rules. Local code and offline tests remain the source of truth.
 
-Example requests: “Use `ml_evaluator` to review this candidate report,” “run
-`$nba-security-audit`,” or “use `$nba-feature-delivery` to add a filter across
-the API and UI.” These helpers review and automate work; the normal release gate
-remains authoritative.
+Reviewers run after edits settle and in parallel where independent; the primary
+agent integrates contracts and runs the release gate before handoff.
 
 ## Use it from your AI assistant (MCP)
 
@@ -232,6 +225,7 @@ guide and tool list.
 ## Documentation
 
 - [`Architecture`](docs/ARCHITECTURE.md)
+- [`Progress log`](docs/PROGRESS.md)
 - [`MCP server`](backend/mcp_servers/README.md)
 - [`Model card`](docs/MODEL_CARD.md)
 - [`Data card`](docs/DATA_CARD.md)

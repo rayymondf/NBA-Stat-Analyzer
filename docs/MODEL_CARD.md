@@ -17,27 +17,51 @@ There are two distinct statuses:
 
 ### Latest v3 candidate (trained, evaluated, not promoted)
 
-A v3 candidate was trained on a freshly ingested, ID-complete three-season
-dataset (`shots-v1-12a766786e75`, 657,387 shots: 2023-24 218,700; 2024-25
-219,527; 2025-26 219,160). The selected model was histogram gradient boosting.
-On the held-out temporal test fold it reported Brier 0.2251, ROC AUC 0.660,
-average precision 0.668, log loss 0.639, and ECE 0.0064.
+A v3 candidate was trained on a freshly ingested three-season dataset
+(`shots-v1-426fd715aa4e`, 700,077 shots) that, unlike earlier runs, includes
+**both regular season and playoffs** (regular season 218,700 / 219,527 /
+219,160 for 2023-24 / 2024-25 / 2025-26; playoffs 13,840 / 14,377 / 14,473).
+Preseason is excluded. The selected model was histogram gradient boosting. On
+the held-out temporal test fold it reported Brier 0.2249, ROC AUC 0.660,
+average precision 0.667, log loss 0.639, and ECE 0.0040.
 
-The promotion gate **did not pass**, so the candidate was **not** promoted and
-v3 is **not** claimed as deployed. The critical slice checks passed. The paired
-non-inferiority test failed on a single metric — expected calibration error —
-because the eligible baseline was the constant train-rate baseline, which is
-trivially perfectly calibrated (ECE near zero). The paired ECE delta interval
-(about 0.0006 to 0.0082) exceeds the 0.005 tolerance against that baseline even
-though the candidate is far better on Brier, AUC, average precision, and log
-loss. This is the gate behaving as designed: it refuses to ship on a calibration
-technicality against a weak baseline, and comparisons against a temporally
-eligible production incumbent are stronger than against a constant baseline. The
-run, metrics, calibration/drift/slice artifacts, and gate decision are recorded
-in MLflow (see below).
+The promotion gate **did not pass**, so the candidate was **not** promoted; the
+locally deployed artifact remains **v2** (Brier 0.2244, AUC 0.662), whose
+on-disk SHA-256 was verified unchanged after the run. On the shared test fold
+v3 is **statistically indistinguishable from — marginally worse than — v2**, so
+there is no evidence it should replace the incumbent. This is the governance
+working as designed: more data (now with playoffs) did not move the needle,
+because shot *location and type* features are near their predictive ceiling for
+make probability, and the gate correctly refused a lateral/regression swap. The
+critical slice checks (rim, three-point, late-clock heaves, home, away) all
+passed; the paired non-inferiority test failed on expected calibration error
+(see limitation 3 below). The run, metrics, and calibration/drift/slice
+artifacts are saved with the candidate; the artifact and training export are
+ignored deployment data, not source-controlled release assets.
 
-The local joblib artifact and training export are ignored deployment data, not
-source-controlled release assets.
+### Known limitations of the v3 pipeline (fix candidates for the next iteration)
+
+1. **Out-of-fold prior is in-sample w.r.t. model selection.** The player-season
+   empirical-Bayes prior is built from expanding-window OOF predictions over all
+   dates *before* the test fold — which includes the tuning fold used to select
+   the winning model. It is not test leakage (the test fold is excluded and each
+   OOF fold fits only on strictly-earlier dates), and it does not affect the
+   promotion gate, but it makes the user-facing percentile surface mildly
+   optimistic. Next iteration: derive the prior only from pre-tuning windows.
+2. **OOF probabilities are uncalibrated; production is calibrated.** The OOF
+   predictions that build the delta distribution come from the raw winning
+   estimator, while inference ships a `CalibratedClassifierCV`. The two are on
+   slightly different probability scales, so player percentiles/shrinkage can be
+   systematically off. This affects the percentile surface, not the gate. Next
+   iteration: calibrate within each OOF fold.
+3. **`--incumbent` can silently fall back to the naive baseline.** When the
+   eligible incumbent cannot be scored on the current feature set, training
+   quietly reverts to the constant train-rate baseline instead of erroring. A
+   constant predictor is trivially perfectly calibrated, so the paired ECE delta
+   then fails the 0.005 tolerance regardless of how good the candidate is — which
+   is why the ECE criterion failed above. Next iteration: make the incumbent
+   comparison either succeed (re-featurize/evaluate v2 on the shared test fold)
+   or fail loudly, never silently degrade to a weaker baseline.
 
 ## Intended use
 

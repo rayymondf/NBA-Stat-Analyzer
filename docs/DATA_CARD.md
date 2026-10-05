@@ -13,20 +13,27 @@ the full source dataset.
 
 ## Scope
 
-The shot pipeline requests one team-season at a time, with `player_id=0`, then
-adds the requested season and an ingestion timestamp. A normal three-season run
-contains 90 expected team-season calls, including explicit empty partitions.
+The shot pipeline requests one team-season-type at a time, with `player_id=0`,
+then tags each shot with its season and season type and adds an ingestion
+timestamp. It ingests **both Regular Season and Playoffs** (preseason is
+intentionally excluded). A three-season run therefore makes up to 180 team
+requests (30 teams x 3 seasons x 2 season types), including explicit empty
+partitions for the ~14 teams per season that miss the playoffs.
 
-The checked-in legacy v2 CSV contains 657,387 rows from 2023-24, 2024-25, and
-2025-26. It is useful for inspection and the existing v2 artifact, but lacks the
-event/player/team identifiers required by the v3 contract. Do not present it as
-a v3-reproducible source.
+The current processed dataset is `shots-v1-426fd715aa4e`: 700,077 shots across
+2023-24, 2024-25, and 2025-26, with regular season (218,700 / 219,527 / 219,160)
+and playoffs (13,840 / 14,377 / 14,473) tagged by `SEASON_TYPE`.
+
+The checked-in legacy v2 CSV contains 657,387 regular-season rows and lacks the
+event/player/team identifiers and playoff coverage of the current contract. It
+is useful for inspection and the existing v2 artifact; do not present it as a
+reproducible source for the current dataset.
 
 ## v3 required fields
 
 - Identity: `GAME_ID`, `GAME_EVENT_ID`, `PLAYER_ID`, `TEAM_ID`
-- Time/context: `SEASON`, `GAME_DATE`, `PERIOD`, `MINUTES_REMAINING`,
-  `SECONDS_REMAINING`, `HTM`
+- Time/context: `SEASON`, `SEASON_TYPE`, `GAME_DATE`, `PERIOD`,
+  `MINUTES_REMAINING`, `SECONDS_REMAINING`, `HTM`
 - Shot: `SHOT_ZONE_BASIC`, `SHOT_ZONE_AREA`, `ACTION_TYPE`, `SHOT_TYPE`,
   `SHOT_DISTANCE`, `LOC_X`, `LOC_Y`, `SHOT_MADE_FLAG`
 
@@ -39,13 +46,15 @@ coordinates/time, no critical nulls, and unique game-event identity.
 Raw partitions use:
 
 ```text
-data/raw/shots/season=<season>/team_id=<id>/shots.parquet
-data/raw/shots/season=<season>/team_id=<id>/partition.json
+data/raw/shots/season=<season>/season_type=<regular-season|playoffs>/team_id=<id>/shots.parquet
+data/raw/shots/season=<season>/season_type=<regular-season|playoffs>/team_id=<id>/partition.json
 ```
 
-The sidecar records status, rows, identity, ingestion time, and SHA-256. Reuse
-requires all checks to pass. Empty partitions are explicit so retries do not
-loop forever.
+The sidecar records status, rows, identity (season, season type, team), ingestion
+time, byte size, mtime, and SHA-256. Reuse first trusts a fast size+mtime+rows
+fingerprint and falls back to a full checksum + column re-read only on mismatch,
+so resuming a run does not re-hash the whole corpus. Empty partitions are
+explicit so retries do not loop forever.
 
 Processed output is Hive-partitioned Parquet with an embedded `_manifest.json`.
 The manifest records source checksum, schema/columns, row count, seasons,

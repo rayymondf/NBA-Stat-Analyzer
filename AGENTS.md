@@ -10,7 +10,8 @@ Build this repository as a production-grade ML/SWE portfolio project. Favor evid
 - `backend/tests`: offline unit and integration tests; never depend on live NBA.com or Gemini calls.
 - `frontend/src`: strict TypeScript React client. API transport belongs in `lib/api.ts` and contracts in `lib/types.ts` or generated `lib/schema.d.ts`.
 - `docs`: architecture, model, operations, security, and portfolio evidence.
-- `.agents/skills`: repo-specific repeatable workflows.
+- `.kiro/agents`: task-focused agents; `.kiro/skills`: the coordinating
+  `nba-agent-workflow` skill.
 
 ## Working agreements
 
@@ -23,19 +24,19 @@ Build this repository as a production-grade ML/SWE portfolio project. Favor evid
 
 ## Delegation
 
-For work that spans independent areas, delegate read-heavy tasks in parallel and keep the primary agent responsible for decisions and integration.
+For work that spans independent areas, delegate read-heavy tasks in parallel and keep the primary agent responsible for decisions and integration. The task-focused agents live in `.kiro/agents/`; the `.kiro/skills/nba-agent-workflow` skill documents when to use which and the review DAG.
 
-- Use `code_mapper` to trace ownership and request flow before a cross-layer change.
-- Use `ml_evaluator` for leakage, calibration, uncertainty, slicing, and promotion review.
-- Use `api_reviewer` for FastAPI contracts, cache/concurrency behavior, security, and compatibility review.
-- Use `release_verifier` only after edits settle; it runs checks and reports evidence but does not repair failures unless asked.
-- Use `performance_profiler` for measured latency, memory, cache, pipeline, and bundle regressions.
-- Use `frontend_quality` for accessibility, responsive behavior, browser evidence, and async-state UX.
-- Use `security_reviewer` for threat modeling, dependency exposure, artifact trust, abuse controls, and secret handling.
-- Use `portfolio_reviewer` to turn verified architecture, tests, and metrics into honest resume/demo evidence.
-- Use the built-in `worker` for a bounded implementation only when it owns a non-overlapping file set.
+- `nba-data-scraper` for resumable NBA.com ingestion into verified Parquet.
+- `web-researcher` for one scoped, cited external lookup (read-only).
+- `bug-efficiency-validator` for read-only defect, correctness, and efficiency review.
+- `api-contract-verifier` to keep OpenAPI and the generated TS client types in sync.
+- `ml-model-evaluator` for leakage, calibration, uncertainty, slicing, and promotion review.
+- `live-ui-auditor` to drive the running app and verify the four journeys work (functional only).
+- `ui-design-validator` for a visual-design critique against Material Design (symmetry/spacing/grid/hierarchy).
+- `feature-test-author` for offline tests covering one feature or bug.
+- `docs-progress-tracker` to keep the progress docs current.
 
-Do not parallelize edits to the same files. Wait for all requested reviewers, reconcile findings against the code, and verify centrally.
+Do not parallelize edits to the same files. Reviewers run after edits settle; wait for all requested reviewers, reconcile findings against the code, and verify centrally.
 
 ## Required verification
 
@@ -59,7 +60,7 @@ npm test
 npm run build
 ```
 
-Use the `$nba-release-readiness` skill for the full local gate. Run only the focused subset during iteration, then the full gate before handoff.
+Run the focused subset during iteration, then the full gate above before handoff.
 
 ## Code Review Rules
 
