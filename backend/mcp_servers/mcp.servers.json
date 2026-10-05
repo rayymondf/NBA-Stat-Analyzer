@@ -1,0 +1,10 @@
+{
+  "_comment": "Ready-to-paste MCP server registration for the NBA Stat Analyzer. Copy the entry under 'mcpServers' into your client's MCP config (Kiro: .kiro/settings/mcp.json). Replace the absolute path with your checkout location. nba_stats is read-only and needs no secret.",
+  "mcpServers": {
+    "nba_stats": {
+      "command": "C:\\Users\\Rayym\\Desktop\\C++\\NBA-Stat-Analyzer\\backend\\.venv\\Scripts\\nba-mcp-stats.exe",
+      "args": [],
+      "env": {}
+    }
+  }
+}

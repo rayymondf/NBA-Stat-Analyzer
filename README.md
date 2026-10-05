@@ -182,6 +182,10 @@ flowchart LR
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for request, data, model, and
 deployment boundaries.
 
+Current-season statistics are cached for up to 12 hours. The scheduled shot-data
+and model pipeline runs separately; its weekly schedule does not change the
+statistics refresh interval.
+
 ## Project agents and skills
 
 The repo contains local Codex configuration so repeated engineering work uses
@@ -195,14 +199,40 @@ the same standards:
   portfolio evidence in `.agents/skills/`.
 - Instructions: root and directory-specific `AGENTS.md` files.
 
+For cross-layer work, map the request/data/UI path with `code_mapper`, assign
+non-overlapping implementation files to task-focused agents, then use the API,
+ML, and frontend reviewers where their boundaries changed. The primary agent
+integrates contracts and runs the release gate. Use browser or external MCP
+tools for a specific evidence gap; local code and offline tests remain the source
+of truth for this repository.
+
 Example requests: “Use `ml_evaluator` to review this candidate report,” “run
 `$nba-security-audit`,” or “use `$nba-feature-delivery` to add a filter across
 the API and UI.” These helpers review and automate work; the normal release gate
 remains authoritative.
 
+## Use it from your AI assistant (MCP)
+
+A local, read-only [MCP](https://modelcontextprotocol.io) server, `nba_stats`,
+lets an external AI client (Claude Desktop, Kiro, Cursor) call this project's NBA
+tools — player lookup, comparisons, shot profiles, league leaders, game
+investigations, and the xFG shot-quality estimate — grounded in live NBA data.
+It wraps the same backend logic the app uses, so it inherits the cache, rate
+limits, and validation.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File backend\mcp_servers\setup.ps1
+```
+
+The setup prints a ready-to-paste client config for your machine. The in-app
+Gemini Ask AI feature is separate and does not go through MCP. See
+[`backend/mcp_servers/README.md`](backend/mcp_servers/README.md) for the full
+guide and tool list.
+
 ## Documentation
 
 - [`Architecture`](docs/ARCHITECTURE.md)
+- [`MCP server`](backend/mcp_servers/README.md)
 - [`Model card`](docs/MODEL_CARD.md)
 - [`Data card`](docs/DATA_CARD.md)
 - [`Deployment and operations`](docs/DEPLOYMENT.md)

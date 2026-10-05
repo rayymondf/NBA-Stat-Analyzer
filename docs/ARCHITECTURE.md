@@ -101,6 +101,31 @@ and pinned SHA-256, streams within a size limit, then deserializes only the
 verified local file. This protects integrity, not the safety of an untrusted
 pickle producer; only project-controlled artifact stores are valid sources.
 
+## MCP server surface
+
+Besides the REST API, the project exposes a local **Model Context Protocol**
+server, `nba_stats` (`backend/mcp_servers/nba_mcp/`), so an external AI client
+(Claude Desktop, Kiro, Cursor) can call the NBA tools directly. It is a thin,
+read-only wrapper over `app/ai/tools.py` — the same functions the in-app
+assistant uses — so it inherits the same input validation, caching, rate
+limiting, and token trimming, and never recomputes statistics.
+
+Three surfaces must not be conflated:
+
+- **`/api/v1` REST** serves the React client and traditional callers.
+- **In-app Ask AI** embeds Gemini *inside the backend* (`app/ai/orchestrator.py`)
+  behind `/api/v1/ai/ask`; it does not use MCP.
+- **`nba_stats` MCP** is for *external* agents and runs over the stdio transport,
+  launched by the client as a subprocess. A `nba-mcp-config` generator emits a
+  machine-correct client config. This is a local, single-user distribution
+  surface; a public multi-user deployment would require the streamable-HTTP
+  transport plus authentication and MCP-layer rate limiting, which is out of
+  scope. A second `nba_gemini` MCP server was prototyped and removed as
+  redundant (an external client brings its own model to orchestrate `nba_stats`).
+
+See [`mcp_servers/README.md`](../backend/mcp_servers/README.md) for setup and the
+full tool list.
+
 ## Frontend boundary
 
 `src/lib/api.ts` is the transport boundary and `src/lib/types.ts` contains
