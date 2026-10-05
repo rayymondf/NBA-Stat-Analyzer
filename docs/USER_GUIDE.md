@@ -37,6 +37,10 @@ The season changes in October. During July through September, it is normal for
 the footer to show the completed season while player search already reflects
 some next-season roster moves.
 
+Current-season statistics normally refresh after a 12-hour cache period. A newly
+completed game may take up to 12 hours to appear; NBA.com outages can delay it
+further when the app serves an older cached response.
+
 ## Home page
 
 The home page has four entry points:
@@ -83,7 +87,7 @@ every tab.
 | Control | Where it applies |
 |---|---|
 | Season | Hero and all profile tabs |
-| Regular season / Playoffs | Hero and all profile tabs |
+| Preseason / Regular season / Playoffs | Hero and all profile tabs |
 | Per game / Per 36 / Per 75 / Per 100 | Overview counting-stat tiles |
 | Home/away | Overview and Game Log |
 | Wins/losses | Overview and Game Log |
@@ -294,7 +298,7 @@ and game dashboards do not need the key.
 
 Choose a mode when it helps:
 
-- **Auto** gives Gemini the full set of statistical tools.
+- **Auto** chooses a relevant set of statistical tools from the question and page context.
 - **Player** focuses on one player's stats, shooting, form, history, similar
   players, impact, elimination games, and xFG.
 - **Claim check** asks for a measurable definition and a verdict.

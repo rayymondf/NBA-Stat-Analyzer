@@ -75,3 +75,13 @@ The scheduled workflow runs weekly during October–April. Raw partitions make
 the job resumable. Force refresh is explicit. Runtime cache entries used by the
 old team-shot training path can be previewed and narrowly removed with
 `nba-pipeline cache-prune-pipeline`; they can be re-fetched from NBA.com.
+
+The 2026–27 regular-season shot partition is deferred until the October 20
+opening date. Preseason statistics are available in the app but are never mixed
+into the regular-season xFG training dataset. If NBA.com times out during a
+pipeline run, the job fails and uploads `ingestion.json` with failed partitions;
+the run does not publish a candidate from incomplete data.
+
+Player-facing current-season statistics use a separate 12-hour cache refresh
+policy. The weekly pipeline schedule governs the versioned training dataset and
+model evidence, not the player-facing statistics cache.

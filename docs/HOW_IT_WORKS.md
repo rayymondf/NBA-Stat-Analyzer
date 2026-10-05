@@ -341,9 +341,9 @@ and explain their outputs.
 - `auto`, `player`, `claim`, `compare`, or `game` mode;
 - optional page context whose serialized JSON is limited to 2,000 characters.
 
-Auto mode can access all 16 statistical tools. Explicit modes expose smaller
-sets to reduce irrelevant tool choices. If Auto receives an exact `game_id` in
-page context, the backend routes it to the two-tool Game set.
+Auto mode chooses a smaller tool set from the question and page context. An
+exact `game_id` routes to Game mode. Player-page context routes to Player mode
+and supplies the player ID directly, avoiding a broad search tool set.
 
 The tool collection covers player search and splits, percentiles, shots, trends,
 career history, comparisons, league queries, similar players, game listing and
@@ -378,8 +378,7 @@ infallible. The evidence and tool trace are there so users can verify the report
 
 The configured `GEMINI_MODEL` is tried first. A unique fallback candidate,
 `gemini-3.1-flash-lite`, is tried for retired models, overloads, and applicable
-rate-limit failures. A rate-limit response that explicitly asks for a delay of
-35 seconds or less can be retried once on the same model before fallback.
+rate-limit failures within the 25-second request budget.
 
 Defaults:
 
@@ -389,8 +388,9 @@ Defaults:
 | `GEMINI_MODEL` | `gemini-flash-latest` | Primary model requested before fallback |
 | `AI_RESPONSE_CACHE` | `1` | Enable successful-report caching |
 | `AI_RESPONSE_CACHE_TTL` | `43200` | Cache lifetime in seconds |
-| `AI_MAX_REMOTE_CALLS` | `6` | Maximum remote calls in the automatic function-calling loop |
-| `AI_MAX_OUTPUT_TOKENS` | `1600` | Generated report limit |
+| `AI_MAX_REMOTE_CALLS` | `2` | Maximum remote calls in the automatic function-calling loop |
+| `AI_MAX_OUTPUT_TOKENS` | `800` | Generated report limit |
+| `AI_REQUEST_TIMEOUT_SECONDS` | `25` | Overall report budget in seconds |
 | `AI_THINKING_LEVEL` | `low` | Gemini thinking setting |
 
 The generation temperature is 0.2. The cache key includes the normalized
