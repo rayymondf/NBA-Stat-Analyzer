@@ -140,5 +140,33 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(len(orchestrator._report_budget), 1)
 
 
+    def test_context_warm_is_noop_without_context(self):
+        # No context -> no thread, no service call.
+        with patch("app.services.frames.merged_logs") as merged:
+            orchestrator._warm_context_cache("player", None)
+        merged.assert_not_called()
+
+    def test_context_warm_prefetches_player_logs_in_background(self):
+        import threading as _threading
+        done = _threading.Event()
+        with patch("app.services.frames.merged_logs") as merged:
+            merged.side_effect = lambda *a, **k: done.set()
+            orchestrator._warm_context_cache("player", {"player_id": 23})
+            # Fire-and-forget daemon thread; it should call merged_logs shortly.
+            assert done.wait(timeout=5), "background warm did not call merged_logs"
+        self.assertEqual(merged.call_args.args[0], 23)
+
+    def test_context_warm_swallows_errors(self):
+        import threading as _threading
+        attempted = _threading.Event()
+        def boom(*_a, **_k):
+            attempted.set()
+            raise RuntimeError("upstream down")
+        with patch("app.services.frames.merged_logs", side_effect=boom):
+            # Must not raise on the calling thread.
+            orchestrator._warm_context_cache("claim", {"player_id": 7})
+            assert attempted.wait(timeout=5)
+
+
 if __name__ == "__main__":
     unittest.main()

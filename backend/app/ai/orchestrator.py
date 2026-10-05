@@ -339,14 +339,52 @@ def _effective_mode(question: str, mode: str, context: dict | None) -> str:
     return "claim"
 
 
+def _warm_context_cache(mode: str, context: dict | None) -> None:
+    """Pre-warm the NBA cache for the tool the model will most likely call first.
+
+    Latency on a cold Ask AI request is dominated by the model's first tool
+    call hitting NBA.com serially inside the generation loop. When the page
+    context already pins a player or game, we can start fetching that exact
+    data the instant the request arrives so it is cache-warm by the time the
+    model asks for it.
+
+    This runs in a fire-and-forget daemon thread and must never block the
+    request, extend the 25s deadline, or add Gemini tokens: it only populates
+    the shared cache the tools already read. On any error (or a cold miss that
+    simply loses the race) the model still calls the tool normally — the warm
+    is a best-effort head start, not a dependency. It reuses the same service
+    functions the tools call, so the cache keys line up exactly.
+    """
+    if not context:
+        return
+
+    def _run() -> None:
+        try:
+            from ..services import frames, game_investigation
+            season = current_season()
+            if mode == "game" and context.get("game_id"):
+                game_investigation.investigate(str(context["game_id"]))
+            elif isinstance(context.get("player_id"), int):
+                # merged_logs is the 3-call base/advanced/starter hot path that
+                # player, compare, and claim tools all build on.
+                frames.merged_logs(context["player_id"], season, "Regular Season")
+        except Exception:  # best-effort warm; never surface
+            log.debug("context cache warm skipped", exc_info=True)
+
+    thread = threading.Thread(target=_run, name="ai-cache-warm", daemon=True)
+    thread.start()
+
+
 def _generate_report(question: str, mode: str, context: dict | None,
                      requested_model: str, *, deadline: float) -> dict:
     from google.genai import errors, types
 
     started = time.monotonic()
-    # Do not synchronously call application services before Gemini. Those calls
-    # can miss the NBA cache and block longer than the shared 25-second budget.
-    # The SDK invokes the compact, mode-specific tools inside its timed request.
+    # Never block on application services here: a synchronous prefetch can miss
+    # the NBA cache and eat the shared 25-second budget. Instead kick off a
+    # non-blocking background warm of the most-likely first tool so it races
+    # the model's opening round-trip and is cache-warm when the SDK calls it.
+    _warm_context_cache(mode, context)
     prefetch_ms = 0.0
     if deadline - time.monotonic() <= 0:
         raise AiRateLimited("AI Mode exceeded its 25-second request budget. Try again shortly.")
