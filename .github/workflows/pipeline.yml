@@ -42,6 +42,7 @@ jobs:
         run: >-
           uv run nba-pipeline ingest --recent-seasons 3
           --raw-dir data/raw/shots --combined data/staging/shots.parquet
+          --current-max-age-hours 12
       - name: Validate and build versioned dataset
         run: >-
           uv run nba-pipeline build data/staging/shots.parquet
@@ -104,6 +105,7 @@ jobs:
           name: xfg-pipeline-${{ github.run_id }}
           path: |
             backend/data/manifests/shots.json
+            backend/data/raw/shots/ingestion.json
             backend/data/models/xfg-v3-evaluation.json
             backend/data/models/xfg-v3-candidate.joblib
           retention-days: 14
