@@ -74,10 +74,16 @@ def apply_filters(df: pd.DataFrame, f: LogFilters) -> pd.DataFrame:
         out = out[~out["HOME"]]
     if f.outcome in ("W", "L"):
         out = out[out["WL"] == f.outcome]
-    if f.starter is True and out["STARTED"].notna().all():
-        out = out[out["STARTED"] == True]  # noqa: E712
-    elif f.starter is False and out["STARTED"].notna().all():
-        out = out[out["STARTED"] == False]  # noqa: E712
+    if f.starter is not None:
+        # When the starter lookup failed upstream the whole STARTED column is
+        # null. Silently ignoring the filter would return every game as if it
+        # were filtered, i.e. wrong numbers with no signal. Surface it instead.
+        if not out["STARTED"].notna().all():
+            raise ValueError(
+                "starter/bench split is unavailable for this player-season; "
+                "retry without the starter filter"
+            )
+        out = out[out["STARTED"] == f.starter]
     if f.opponent:
         out = out[out["OPP"] == f.opponent.upper()]
     if f.date_from:

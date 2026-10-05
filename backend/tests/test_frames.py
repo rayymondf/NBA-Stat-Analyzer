@@ -57,13 +57,15 @@ def test_starter_and_opponent_filters(game_logs):
     assert bench["GAME_ID"].tolist() == ["0022500002"]
 
 
-def test_unknown_starter_data_does_not_drop_every_game(game_logs):
+def test_unknown_starter_data_surfaces_instead_of_silently_dropping(game_logs):
+    # When the starter lookup failed upstream (whole STARTED column null) an
+    # explicit starter filter must error, not silently return every game as if
+    # filtered (which would be wrong numbers with no signal).
+    import pytest
     logs = game_logs.copy()
     logs["STARTED"] = None
-    filtered = frames.apply_filters(logs, frames.LogFilters(
-        season="2025-26", starter=True,
-    ))
-    assert len(filtered) == len(logs)
+    with pytest.raises(ValueError, match="starter/bench split is unavailable"):
+        frames.apply_filters(logs, frames.LogFilters(season="2025-26", starter=True))
 
 
 @given(

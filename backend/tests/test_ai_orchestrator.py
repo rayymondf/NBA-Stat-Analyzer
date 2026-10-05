@@ -117,6 +117,28 @@ class OrchestratorTests(unittest.TestCase):
         orchestrator.ask("Why did they lose?", "auto", {"game_id": "123"})
         self.assertEqual(generate.call_args.args[1], "game")
 
+    @patch("app.ai.orchestrator._store_report")
+    @patch("app.ai.orchestrator._generate_report")
+    @patch("app.ai.orchestrator._cached_report", return_value=None)
+    def test_failed_report_refunds_global_budget(self, _cached, generate, _store):
+        # A failed Gemini call must release its reserved budget slot; otherwise
+        # a burst of upstream errors exhausts the per-minute budget and locks
+        # out AI Mode without a single successful report.
+        orchestrator._report_budget.clear()
+        generate.side_effect = RuntimeError("gemini exploded")
+        with self.assertRaises(RuntimeError):
+            orchestrator.ask("Any question?", "auto")
+        self.assertEqual(len(orchestrator._report_budget), 0)
+
+    @patch("app.ai.orchestrator._store_report")
+    @patch("app.ai.orchestrator._generate_report")
+    @patch("app.ai.orchestrator._cached_report", return_value=None)
+    def test_successful_report_keeps_budget_reservation(self, _cached, generate, _store):
+        orchestrator._report_budget.clear()
+        generate.return_value = {"answer_markdown": "ok"}
+        orchestrator.ask("Another question?", "auto")
+        self.assertEqual(len(orchestrator._report_budget), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

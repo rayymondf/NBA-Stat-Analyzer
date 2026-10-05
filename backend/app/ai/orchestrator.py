@@ -5,6 +5,7 @@ comes from tool outputs (the app's own computed statistics). The final answer
 is a structured JSON report the frontend renders with evidence, counterevidence,
 data scope and entity links.
 """
+import contextlib
 import hashlib
 import json
 import logging
@@ -168,16 +169,22 @@ def _cache_key(question: str, mode: str, context: dict | None,
 
 
 @contextmanager
-def _request_lock(key: str) -> Iterator[None]:
-    """Coalesce identical in-flight requests in this backend process."""
+def _request_lock(key: str, timeout: float | None = None) -> Iterator[bool]:
+    """Coalesce identical in-flight requests in this backend process.
+
+    Yields True if the per-key lock was acquired, False if ``timeout`` elapsed
+    first. A bounded wait prevents duplicate identical requests from piling up
+    behind a slow holder and exhausting the request-handling threadpool.
+    """
     with _request_locks_guard:
         lock, users = _request_locks.get(key, (threading.Lock(), 0))
         _request_locks[key] = (lock, users + 1)
-    lock.acquire()
+    acquired = lock.acquire(timeout=timeout) if timeout is not None else lock.acquire()
     try:
-        yield
+        yield acquired
     finally:
-        lock.release()
+        if acquired:
+            lock.release()
         with _request_locks_guard:
             current_lock, users = _request_locks.get(key, (lock, 1))
             if current_lock is lock and users <= 1:
@@ -186,7 +193,7 @@ def _request_lock(key: str) -> Iterator[None]:
                 _request_locks[key] = (lock, users - 1)
 
 
-def _reserve_report_budget() -> None:
+def _reserve_report_budget() -> float:
     now = time.monotonic()
     limit = _positive_int_env(
         "AI_GLOBAL_REPORTS_PER_MINUTE", DEFAULT_GLOBAL_REPORTS_PER_MINUTE
@@ -197,6 +204,19 @@ def _reserve_report_budget() -> None:
         if len(_report_budget) >= limit:
             raise AiRateLimited("AI Mode reached its global request budget. Try again shortly.")
         _report_budget.append(now)
+        return now
+
+
+def _refund_report_budget(token: float) -> None:
+    """Return a reserved slot when its report never completed.
+
+    The budget is reserved before the Gemini call so the global rate limit
+    counts in-flight work. If that call fails, the slot must be released;
+    otherwise a burst of upstream errors silently exhausts the per-minute
+    budget and locks out AI Mode without a single successful report.
+    """
+    with _report_budget_lock, contextlib.suppress(ValueError):
+        _report_budget.remove(token)
 
 
 def _cached_report(key: str) -> dict | None:
@@ -463,16 +483,24 @@ def ask(question: str, mode: str = "auto",
         hit["performance"] = {"total_ms": 0.0, "cache": "hit", "tool_count": 0}
         return hit
 
-    # The second cache check makes concurrent duplicates wait for and reuse the
-    # first result rather than spending two free-tier requests.
-    with _request_lock(key):
+    # Coalesce identical in-flight requests, but do not let a second caller
+    # block indefinitely behind the first's full (~25s) Gemini call: the keyed
+    # lock is acquired with a bounded timeout and a duplicate that cannot get
+    # it quickly fails fast rather than pinning a worker.
+    with _request_lock(key, timeout=DEFAULT_REQUEST_TIMEOUT_SECONDS) as acquired:
+        if not acquired:
+            if hit := _cached_report(key):
+                hit["performance"] = {"total_ms": 0.0, "cache": "hit", "tool_count": 0}
+                return hit
+            raise AiRateLimited("AI Mode is busy with an identical request. Try again shortly.")
         if hit := _cached_report(key):
             hit["performance"] = {"total_ms": 0.0, "cache": "hit", "tool_count": 0}
             return hit
         if not _ai_slots.acquire(timeout=1):
             raise AiRateLimited("AI Mode is busy. Try again shortly.")
+        budget_token: float | None = None
         try:
-            _reserve_report_budget()
+            budget_token = _reserve_report_budget()
             deadline = time.monotonic() + min(
                 _positive_int_env("AI_REQUEST_TIMEOUT_SECONDS", DEFAULT_REQUEST_TIMEOUT_SECONDS),
                 DEFAULT_REQUEST_TIMEOUT_SECONDS,
@@ -480,6 +508,9 @@ def ask(question: str, mode: str = "auto",
             report = _generate_report(
                 question, effective_mode, context, requested_model, deadline=deadline)
             _store_report(key, report)
+            budget_token = None  # report succeeded; keep the reservation
             return report
         finally:
+            if budget_token is not None:
+                _refund_report_budget(budget_token)
             _ai_slots.release()

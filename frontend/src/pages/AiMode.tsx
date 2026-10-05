@@ -262,8 +262,8 @@ export default function AiMode() {
             </p>
           </Card>
         )}
-        {turns.map((t, i) => (
-          <div key={i} className="space-y-2">
+        {turns.map((t) => (
+          <div key={t.id} className="space-y-2">
             <div className="flex justify-end">
               <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-br-md text-sm"
                 style={{ background: "color-mix(in oklab, var(--series-7) 22%, var(--surface))" }}>
