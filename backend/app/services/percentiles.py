@@ -36,13 +36,18 @@ def position_map(season: str) -> dict[int, str]:
 
 
 def league_pool(season: str, season_type: str = "Regular Season",
-                measure: str = "Base", per_mode: str = "PerGame") -> pd.DataFrame:
+                measure: str = "Base", per_mode: str = "PerGame",
+                positions: dict[int, str] | None = None) -> pd.DataFrame:
     rows = api.league_player_stats(season, per_mode=per_mode, measure=measure,
                                    season_type=season_type)
     df = pd.DataFrame(rows)
     if df.empty:
         return df
-    positions = position_map(season)
+    # position_map hits the player index (1-2 upstream calls) and builds a
+    # ~450-player dict. Callers that need Base AND Advanced pools pass it in
+    # once instead of rebuilding it per measure.
+    if positions is None:
+        positions = position_map(season)
     df["POS_GROUP"] = df["PLAYER_ID"].map(positions).fillna("F")
     return df
 
@@ -70,8 +75,9 @@ def player_percentiles(player_id: int, season: str,
                        season_type: str = "Regular Season",
                        stats: list[str] | None = None) -> dict:
     """Percentiles for a player's per-game stats vs same-position peers."""
-    base = qualified(league_pool(season, season_type, "Base"))
-    adv = qualified(league_pool(season, season_type, "Advanced"))
+    positions = position_map(season)
+    base = qualified(league_pool(season, season_type, "Base", positions=positions))
+    adv = qualified(league_pool(season, season_type, "Advanced", positions=positions))
 
     result: dict[str, dict] = {}
     for df in (base, adv):

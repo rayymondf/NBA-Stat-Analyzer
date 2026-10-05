@@ -74,11 +74,22 @@ def _reusable_partition(
             return not path.exists() and metadata.get("rows") == 0, 0, True
         if metadata.get("status") != "complete" or not path.is_file():
             return False, 0, False
+        recorded_rows = metadata.get("rows")
+        # Fast path: if the file's size and mtime still match what we recorded
+        # at ingest, trust the partition without re-hashing and re-reading it.
+        # Re-hashing every partition on every resume is O(corpus) I/O; the slow
+        # verified path still runs whenever the fingerprint does not match.
+        recorded_size = metadata.get("size_bytes")
+        recorded_mtime = metadata.get("mtime_ns")
+        if recorded_size is not None and recorded_mtime is not None:
+            stat = path.stat()
+            if stat.st_size == recorded_size and stat.st_mtime_ns == recorded_mtime:
+                return True, int(recorded_rows or 0), False
         if sha256_file(path) != metadata.get("sha256"):
             return False, 0, False
         frame = pd.read_parquet(path, columns=["SEASON", "TEAM_ID"])
         valid = (
-            len(frame) == metadata.get("rows")
+            len(frame) == recorded_rows
             and frame["SEASON"].astype(str).eq(season).all()
             and pd.to_numeric(frame["TEAM_ID"], errors="coerce").eq(team_id).all()
         )
@@ -192,6 +203,7 @@ def ingest_shots(
                 temporary = path.with_suffix(".parquet.tmp")
                 frame.to_parquet(temporary, index=False)
                 temporary.replace(path)
+                partition_stat = path.stat()
                 _write_json(metadata_path, {
                     "schema_version": "raw-shot-partition-v1",
                     "season": season,
@@ -199,6 +211,8 @@ def ingest_shots(
                     "rows": len(frame),
                     "status": "complete",
                     "sha256": sha256_file(path),
+                    "size_bytes": partition_stat.st_size,
+                    "mtime_ns": partition_stat.st_mtime_ns,
                     "ingested_at": datetime.now(UTC).isoformat(),
                 })
                 fetched += 1
@@ -239,15 +253,52 @@ def ingest_shots(
 
 
 def combine_raw(partitions: list[Path], output: Path) -> Path:
-    """Combine raw partitions into a validated-build input without index drift."""
+    """Combine raw partitions into a validated-build input without index drift.
+
+    Partitions are streamed one at a time rather than concatenated into a
+    single in-memory frame: the full league across several seasons is 650k+
+    rows, so a single pd.concat held peak memory proportional to the entire
+    corpus. For Parquet output we append each partition as a row group via a
+    pyarrow ParquetWriter, keeping only one partition resident at a time. The
+    CSV fallback streams append-mode writes with the header written once.
+    """
     if not partitions:
         raise ValueError("No non-empty raw partitions were provided; inspect ingestion.json for details")
-    frame = pd.concat((pd.read_parquet(path) for path in partitions), ignore_index=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
-    if output.suffix.lower() == ".parquet":
-        frame.to_parquet(temporary, index=False)
-    else:
-        frame.to_csv(temporary, index=False)
-    temporary.replace(output)
+    temporary.unlink(missing_ok=True)
+    is_parquet = output.suffix.lower() == ".parquet"
+    try:
+        if is_parquet:
+            import pyarrow as pa
+            import pyarrow.parquet as pq
+
+            writer: pq.ParquetWriter | None = None
+            try:
+                for path in partitions:
+                    table = pa.Table.from_pandas(
+                        pd.read_parquet(path), preserve_index=False
+                    )
+                    if writer is None:
+                        writer = pq.ParquetWriter(temporary, table.schema)
+                    else:
+                        # Align later partitions to the first partition's schema
+                        # so an incidental column-order/type drift cannot abort
+                        # the whole combine.
+                        table = table.cast(writer.schema, safe=False)
+                    writer.write_table(table)
+            finally:
+                if writer is not None:
+                    writer.close()
+        else:
+            header_written = False
+            with open(temporary, "w", encoding="utf-8", newline="") as handle:
+                for path in partitions:
+                    chunk = pd.read_parquet(path)
+                    chunk.to_csv(handle, index=False, header=not header_written)
+                    header_written = True
+        temporary.replace(output)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
     return output
