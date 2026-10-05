@@ -38,6 +38,7 @@ export default function VsModelMode() {
   const rawId = Number(params.get("player"));
   const playerId = Number.isSafeInteger(rawId) && rawId > 0 ? rawId : null;
   const [picking, setPicking] = useState(false);
+  const [showExplainer, setShowExplainer] = useState(false);
   const { filters } = useAnalysisPeriod();
   const summary = useQuery({
     queryKey: ["summary", playerId, filters.season, filters.season_type],
@@ -92,7 +93,7 @@ export default function VsModelMode() {
             {model.isLoading ? <Skeleton className="h-48" /> : model.error ? <ErrorState message={model.error.message} onRetry={() => void model.refetch()} /> : modelInfo?.delta_distribution?.length ? <DeltaHistogram distribution={modelInfo.delta_distribution} playerDelta={quality.delta} playerName={name} /> : <p className="text-sm text-ink-muted">League reference distribution unavailable.</p>}
             <p className="text-xs text-ink-muted mt-2">Reference seasons: {modelInfo?.seasons?.join(", ") || "unavailable"}. The reference population can differ from your selected period.</p>
           </Card>
-          <details className="card p-5"><summary className="cursor-pointer font-semibold">What drives the model estimate?</summary><div className="mt-4"><ShotDifficultyExplainer playerId={playerId} filters={filters} /></div></details>
+          <details className="card p-5" onToggle={(event) => setShowExplainer(event.currentTarget.open)}><summary className="cursor-pointer font-semibold">What drives the model estimate?</summary>{showExplainer && <div className="mt-4"><ShotDifficultyExplainer playerId={playerId} filters={filters} /></div>}</details>
         </> : null}
       <SearchPalette open={picking} onClose={() => setPicking(false)} onPick={pickPlayer} />
     </div>

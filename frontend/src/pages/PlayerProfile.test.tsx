@@ -35,6 +35,12 @@ describe("PlayerProfile URL state", () => {
     expect(screen.getByRole("combobox", { name: "More analysis" })).toHaveValue("");
   });
 
+  it("preserves the NBA Pre Season type in player URLs", async () => {
+    renderProfile("/player/7?season=2024-25&season_type=Pre%20Season");
+    await screen.findByText("Overview content");
+    expect(screen.getByRole("button", { name: "Preseason" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("rejects unknown query values and writes selected analysis back to the URL", async () => {
     const user = userEvent.setup();
     renderProfile("/player/7?tab=unknown&season=not-a-season&per_mode=invalid");

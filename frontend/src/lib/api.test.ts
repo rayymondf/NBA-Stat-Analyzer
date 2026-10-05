@@ -38,10 +38,12 @@ describe("typed API client", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(api.ask({ question: "Who leads?", mode: "auto" })).resolves.toEqual(report);
+    const controller = new AbortController();
+    await expect(api.ask({ question: "Who leads?", mode: "auto" }, controller.signal)).resolves.toEqual(report);
     expect(fetchMock).toHaveBeenCalledWith("/api/v1/ai/ask", expect.objectContaining({
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
     }));
   });
 

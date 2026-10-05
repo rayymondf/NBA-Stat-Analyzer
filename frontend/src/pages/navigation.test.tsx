@@ -33,6 +33,14 @@ describe("page navigation contracts", () => {
     await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent("team=LAL"));
   });
 
+  it("keeps the exact NBA Pre Season type from a Games URL", async () => {
+    vi.spyOn(api, "meta").mockResolvedValue({ current_season: "2026-27", seasons: ["2025-26", "2026-27"], season_types: ["Pre Season", "Regular Season"], data_through: null, player_lookup_note: "", freshness_note: "" });
+    const games = vi.spyOn(api, "games").mockResolvedValue([]);
+    renderPage(<GamesPage />, ["/games?season=2026-27&type=Pre%20Season"]);
+    await waitFor(() => expect(screen.getAllByRole("combobox", { name: "Season type" }).at(-1)).toHaveValue("Pre Season"));
+    expect(games).toHaveBeenCalledWith(expect.objectContaining({ season_type: "Pre Season" }));
+  });
+
   it("prefills an AI question from navigation without submitting it", async () => {
     const ask = vi.spyOn(api, "ask").mockResolvedValue({ answer_markdown: "", verdict: null, key_findings: [], counterevidence: [], data_scope: {}, links: [] });
     renderPage(<AiMode />, [{ pathname: "/ai", state: { question: "Why did Boston lose?", context: { game_id: "1" } } }]);
@@ -41,5 +49,20 @@ describe("page navigation contracts", () => {
     fireEvent.click(screen.getByRole("button", { name: /Who are the top five scorers/i }));
     expect(screen.getByLabelText("Ask the analyst")).toHaveValue("Who are the top five scorers in the NBA this season?");
     expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("cancels an in-flight AI request", async () => {
+    let signal: AbortSignal | undefined;
+    vi.spyOn(api, "ask").mockImplementation((_body, requestSignal) => new Promise((_resolve, reject) => {
+      signal = requestSignal;
+      requestSignal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+    }));
+    renderPage(<AiMode />, ["/ai"]);
+    fireEvent.change(screen.getByLabelText("Ask the analyst"), { target: { value: "Who leads?" } });
+    fireEvent.submit(screen.getByLabelText("Ask the analyst").closest("form")!);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+    expect(await screen.findByText("Answer canceled.")).toBeInTheDocument();
   });
 });

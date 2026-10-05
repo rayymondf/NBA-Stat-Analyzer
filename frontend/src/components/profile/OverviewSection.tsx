@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { num, pct, signed } from "../../lib/format";
-import { Card, CardTitle, ErrorState, PercentileBar, SkeletonCard, StatTile } from "../ui";
+import { Card, CardTitle, EmptyState, ErrorState, PercentileBar, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 const PCT_ROWS: { key: string; label: string; fmt?: (v: number) => string; tip?: string }[] = [
@@ -25,15 +25,15 @@ export default function OverviewSection({ playerId, filters }: {
   filters: ProfileFilters;
 }) {
   const { perMode, ...apiFilters } = filters;
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["overview", playerId, apiFilters],
     queryFn: () => api.overview(playerId, apiFilters),
   });
 
   if (isLoading) return <div className="grid md:grid-cols-2 gap-4"><SkeletonCard lines={6} /><SkeletonCard lines={6} /></div>;
-  if (error) return <ErrorState message={(error as Error).message} />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
   const stats = data?.stats;
-  if (!stats || !stats.games) return <ErrorState message="No games match these filters." />;
+  if (!stats || !stats.games) return <EmptyState message="No games match these filters." />;
 
   const rates = stats[perMode] ?? stats.per_game;
   const sh = stats.shooting ?? {};

@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { num, signed } from "../../lib/format";
-import { Card, CardTitle, ErrorState, SkeletonCard, StatTile } from "../ui";
+import { Card, CardTitle, EmptyState, ErrorState, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 export default function ImpactSection({ playerId, filters }: {
   playerId: number;
   filters: ProfileFilters;
 }) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["impact", playerId, filters.season, filters.season_type],
     queryFn: () => api.impact(playerId, {
       season: filters.season, season_type: filters.season_type,
@@ -16,9 +16,9 @@ export default function ImpactSection({ playerId, filters }: {
   });
 
   if (isLoading) return <SkeletonCard lines={6} />;
-  if (error) return <ErrorState message={(error as Error).message} />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
   const cur = data?.current;
-  if (!cur) return <ErrorState message="No on/off data available for this player and season." />;
+  if (!cur) return <EmptyState message="No on/off data available for this player and season." />;
 
   const rows = [cur, ...(data.history ?? [])];
 

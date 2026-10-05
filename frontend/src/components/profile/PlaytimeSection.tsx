@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { num, pct, signed } from "../../lib/format";
 import { MinutesProductionChart } from "../charts";
-import { Card, CardTitle, ErrorState, SkeletonCard, StatTile } from "../ui";
+import { Card, CardTitle, EmptyState, ErrorState, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 export default function PlaytimeSection({ playerId, filters }: {
   playerId: number;
   filters: ProfileFilters;
 }) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["playtime", playerId, filters.season, filters.season_type],
     queryFn: () => api.playtime(playerId, {
       season: filters.season, season_type: filters.season_type,
@@ -17,8 +17,8 @@ export default function PlaytimeSection({ playerId, filters }: {
   });
 
   if (isLoading) return <SkeletonCard lines={8} />;
-  if (error) return <ErrorState message={(error as Error).message} />;
-  if (!data?.games) return <ErrorState message="No games for this selection." />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
+  if (!data?.games) return <EmptyState message="No games for this selection." />;
 
   return (
     <div className="space-y-4">

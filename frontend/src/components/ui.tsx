@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { GLOSSARY } from "../lib/glossary";
 import { ordinal } from "../lib/format";
 
@@ -122,6 +122,7 @@ export function EmptyState({ message }: { message: string }) {
 /** Hover tooltip that explains a stat in plain English. */
 export function GlossaryTip({ term, label }: { term: string; label?: string }) {
   const [open, setOpen] = useState(false);
+  const tooltipId = useId();
   const text = GLOSSARY[term];
   if (!text) return label ? <span>{label}</span> : null;
   return (
@@ -133,15 +134,25 @@ export function GlossaryTip({ term, label }: { term: string; label?: string }) {
       {label && <span>{label}</span>}
       <button
         aria-label={`What is ${term}?`}
-        className="ml-0.5 w-3.5 h-3.5 rounded-full border border-edge text-[9px] leading-none text-ink-muted hover:text-ink hover:border-ink-muted transition-colors cursor-help"
+        aria-expanded={open}
+        aria-controls={tooltipId}
+        aria-describedby={open ? tooltipId : undefined}
+        className="ml-0.5 inline-grid min-w-6 min-h-6 place-items-center rounded-full border border-edge text-[11px] leading-none text-ink-muted hover:text-ink hover:border-ink-muted transition-colors cursor-help focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
         tabIndex={0}
+        onClick={() => setOpen(true)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOpen(false);
+            event.currentTarget.blur();
+          }
+        }}
       >
         ?
       </button>
       {open && (
-        <span className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 p-2.5 rounded-lg text-xs leading-relaxed normal-case font-normal tracking-normal text-ink bg-surface-2 border border-edge shadow-xl">
+        <span id={tooltipId} role="tooltip" className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-60 p-2.5 rounded-lg text-xs leading-relaxed normal-case font-normal tracking-normal text-ink bg-surface-2 border border-edge shadow-xl">
           {text}
         </span>
       )}

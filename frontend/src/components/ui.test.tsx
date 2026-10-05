@@ -61,11 +61,15 @@ describe("shared UI contracts", () => {
     expect(screen.getByRole("button", { name: "Guards" })).toHaveClass("chip-active");
   });
 
-  it("shows glossary content on focus", () => {
+  it("shows glossary content with an accessible relationship and closes on Escape", () => {
     render(<GlossaryTip term="TS_PCT" />);
     const button = screen.getByRole("button", { name: /What is TS_PCT/i });
     fireEvent.focus(button);
-    expect(screen.getByText(/True shooting/i)).toBeInTheDocument();
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent(/True shooting/i);
+    expect(button).toHaveAttribute("aria-describedby", tooltip.id);
+    fireEvent.keyDown(button, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("expands implementation notes and renders supporting primitives", () => {

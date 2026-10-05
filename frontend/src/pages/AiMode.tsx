@@ -30,14 +30,6 @@ const VERDICT_COLORS: Record<string, string> = {
   "Insufficient evidence": "var(--ink-muted)",
 };
 
-const PROGRESS_STEPS = [
-  "Interpreting the question…",
-  "Deciding what evidence is needed…",
-  "Pulling real stats from NBA data…",
-  "Checking for counterexamples…",
-  "Writing the report…",
-];
-
 /** Tiny markdown renderer (bold, headers, bullets, paragraphs). */
 function Markdown({ text }: { text: string }) {
   const html = text
@@ -56,15 +48,10 @@ function Markdown({ text }: { text: string }) {
 }
 
 function Progress() {
-  const [step, setStep] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setStep((s) => Math.min(s + 1, PROGRESS_STEPS.length - 1)), 3500);
-    return () => clearInterval(t);
-  }, []);
   return (
     <div className="flex items-center gap-3 text-sm text-ink-2 py-3">
       <span className="w-4 h-4 rounded-full border-2 border-edge border-t-[var(--series-7)] animate-spin" />
-      {PROGRESS_STEPS[step]}
+      Preparing an evidence-backed answer…
     </div>
   );
 }
@@ -176,13 +163,16 @@ export default function AiMode() {
   const context = useRef<Record<string, unknown> | undefined>(undefined);
   const nextTurnId = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const requestAbort = useRef<AbortController | null>(null);
+
+  useEffect(() => () => requestAbort.current?.abort(), []);
 
   const mutation = useMutation({
-    mutationFn: ({ question }: { id: number; question: string }) => api.ask({ question, mode, context: context.current }),
+    mutationFn: ({ question, signal }: { id: number; question: string; signal: AbortSignal }) => api.ask({ question, mode, context: context.current }, signal),
     onSuccess: (report, { id }) =>
       setTurns((t) => t.map((turn) => (turn.id === id ? { ...turn, report, error: undefined } : turn))),
     onError: (err, { id }) =>
-      setTurns((t) => t.map((turn) => (turn.id === id ? { ...turn, error: (err as Error).message } : turn))),
+      setTurns((t) => t.map((turn) => (turn.id === id ? { ...turn, error: (err as Error).name === "AbortError" ? "Answer canceled." : (err as Error).message } : turn))),
   });
 
   const submit = (q: string) => {
@@ -191,14 +181,20 @@ export default function AiMode() {
     const id = nextTurnId.current++;
     setTurns((t) => [...t, { id, question }]);
     setInput("");
-    mutation.mutate({ id, question });
+    const controller = new AbortController();
+    requestAbort.current = controller;
+    mutation.mutate({ id, question, signal: controller.signal });
   };
 
   const retry = (turn: Turn) => {
     if (mutation.isPending) return;
     setTurns((items) => items.map((item) => item.id === turn.id ? { ...item, error: undefined } : item));
-    mutation.mutate({ id: turn.id, question: turn.question });
+    const controller = new AbortController();
+    requestAbort.current = controller;
+    mutation.mutate({ id: turn.id, question: turn.question, signal: controller.signal });
   };
+
+  const cancel = () => requestAbort.current?.abort();
 
   // Navigation supplies draft wording and context only; it never sends a request.
   useEffect(() => {
@@ -281,7 +277,7 @@ export default function AiMode() {
                 <button type="button" onClick={() => retry(t)} disabled={mutation.isPending} className="ml-3 text-xs underline underline-offset-2 disabled:opacity-50">Try again</button>
               </Card>
             )}
-            {!t.report && !t.error && <Progress />}
+            {!t.report && !t.error && <div className="flex items-center gap-3"><Progress />{mutation.isPending && <button type="button" className="text-xs underline underline-offset-2" onClick={cancel}>Cancel</button>}</div>}
           </div>
         ))}
         <div ref={bottomRef} />

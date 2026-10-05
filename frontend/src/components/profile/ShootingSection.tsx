@@ -5,7 +5,7 @@ import { api, type ShotPoint } from "../../lib/api";
 import { num, pct } from "../../lib/format";
 import ShotChart from "../ShotChart";
 import ShotDifficultyExplainer from "../model/ShotDifficultyExplainer";
-import { Card, CardTitle, ErrorState, SkeletonCard, StatTile } from "../ui";
+import { Card, CardTitle, EmptyState, ErrorState, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 export default function ShootingSection({ playerId, filters, chartFilters }: {
@@ -15,12 +15,13 @@ export default function ShootingSection({ playerId, filters, chartFilters }: {
 }) {
   const [localQuarter, setLocalQuarter] = useState<number | null>(null);
   const [localResult, setLocalResult] = useState<"all" | "made" | "missed">("all");
+  const [showExplainer, setShowExplainer] = useState(false);
   const quarter = chartFilters?.quarter ?? localQuarter;
   const result = chartFilters?.result ?? localResult;
   const setQuarter = (value: number | null) => chartFilters ? chartFilters.onChange({ quarter: value }) : setLocalQuarter(value);
   const setResult = (value: "all" | "made" | "missed") => chartFilters ? chartFilters.onChange({ result: value }) : setLocalResult(value);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["shooting", playerId, filters.season, filters.season_type],
     queryFn: () => api.shooting(playerId, {
       season: filters.season,
@@ -28,7 +29,7 @@ export default function ShootingSection({ playerId, filters, chartFilters }: {
     }),
   });
 
-  const { data: quality, isLoading: qualityLoading, error: qualityError } = useQuery({
+  const { data: quality, isLoading: qualityLoading, error: qualityError, refetch: refetchQuality } = useQuery({
     queryKey: ["shotQuality", playerId, filters.season, filters.season_type],
     queryFn: () => api.shotQuality(playerId, {
       season: filters.season,
@@ -44,8 +45,8 @@ export default function ShootingSection({ playerId, filters, chartFilters }: {
   }, [data, quarter, result]);
 
   if (isLoading) return <div className="grid md:grid-cols-2 gap-4"><SkeletonCard lines={8} /><SkeletonCard lines={8} /></div>;
-  if (error) return <ErrorState message={(error as Error).message} />;
-  if (!data?.points?.length) return <ErrorState message="No shot data for this season." />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
+  if (!data?.points?.length) return <EmptyState message={`No shot data is available for ${filters.season_type ?? "this season type"}.`} />;
 
   const t = data.totals ?? {};
   const sb = data.scoring_breakdown ?? {};
@@ -111,7 +112,7 @@ export default function ShootingSection({ playerId, filters, chartFilters }: {
           </Card>
 
           {qualityLoading && <SkeletonCard lines={3} />}
-          {qualityError && <ErrorState message={(qualityError as Error).message} />}
+          {qualityError && <ErrorState message={(qualityError as Error).message} onRetry={() => void refetchQuality()} />}
           {quality && !quality.available && (
             <Card><p className="text-xs text-ink-muted">Shot-quality model unavailable: {quality.reason}</p></Card>
           )}
@@ -179,7 +180,17 @@ export default function ShootingSection({ playerId, filters, chartFilters }: {
           )}
 
           {quality?.available && (
-            <ShotDifficultyExplainer playerId={playerId} filters={filters} />
+            <Card className="!p-0 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowExplainer((open) => !open)}
+                aria-expanded={showExplainer}
+                className="w-full min-h-11 px-5 py-3 text-left text-sm font-semibold hover:bg-surface-container transition-colors"
+              >
+                {showExplainer ? "Hide model inputs" : "What drives the model estimate?"}
+              </button>
+              {showExplainer && <div className="px-5 pb-5"><ShotDifficultyExplainer playerId={playerId} filters={filters} /></div>}
+            </Card>
           )}
 
           {sb.pct_ast_fgm != null && (

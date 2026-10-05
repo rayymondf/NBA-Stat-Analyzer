@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { num, pct, signed } from "../../lib/format";
 import { TrendChart } from "../charts";
-import { Card, CardTitle, ErrorState, SkeletonCard, StatTile } from "../ui";
+import { Card, CardTitle, EmptyState, ErrorState, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 export default function TrendsSection({ playerId, filters }: {
   playerId: number;
   filters: ProfileFilters;
 }) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["trends", playerId, filters.season, filters.season_type],
     queryFn: () => api.trends(playerId, {
       season: filters.season, season_type: filters.season_type,
@@ -21,8 +21,8 @@ export default function TrendsSection({ playerId, filters }: {
   });
 
   if (isLoading) return <SkeletonCard lines={8} />;
-  if (error) return <ErrorState message={(error as Error).message} />;
-  if (!data?.series?.length) return <ErrorState message="Not enough games to chart trends yet." />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
+  if (!data?.series?.length) return <EmptyState message="Not enough games to chart trends yet." />;
 
   const form = data.recent_form ?? {};
   const formDelta = (form.last_10_pts ?? 0) - (form.season_pts ?? 0);

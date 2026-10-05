@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { num, pct, signed } from "../../lib/format";
-import { Card, CardTitle, ErrorState, PercentileBar, SkeletonCard, StatTile } from "../ui";
+import { Card, CardTitle, EmptyState, ErrorState, PercentileBar, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 export default function EfficiencySection({ playerId, filters }: {
   playerId: number;
   filters: ProfileFilters;
 }) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["efficiency", playerId, filters.season, filters.season_type],
     queryFn: () => api.efficiency(playerId, {
       season: filters.season, season_type: filters.season_type,
@@ -16,9 +16,9 @@ export default function EfficiencySection({ playerId, filters }: {
   });
 
   if (isLoading) return <SkeletonCard lines={8} />;
-  if (error) return <ErrorState message={(error as Error).message} />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
   const m = data?.metrics;
-  if (!m || !data.games) return <ErrorState message="No efficiency data for this selection." />;
+  if (!m || !data.games) return <EmptyState message="No efficiency data for this selection." />;
   const p = data.percentiles ?? {};
 
   return (

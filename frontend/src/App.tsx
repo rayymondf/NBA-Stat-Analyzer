@@ -53,7 +53,7 @@ function DataFreshnessFooter() {
         <span>NBA Stat Analyzer <span aria-hidden="true">·</span> Independent basketball analytics</span>
         {meta && <details className="max-w-lg">
           <summary className="cursor-pointer text-ink-2">NBA.com data{meta.data_through ? ` · through ${meta.data_through}` : ""}</summary>
-          <p className="mt-3 leading-relaxed">Seasons {meta.seasons.at(-1)}–{meta.current_season}. Recent data is cached and may lag official updates. Historical statistics can be revised by the source.</p>
+          <p className="mt-3 leading-relaxed">Seasons {meta.seasons.at(-1)}–{meta.current_season}. Current-season data refreshes at least every 12 hours and may lag official updates. Historical statistics can be revised by the source.</p>
           <p className="mt-2 leading-relaxed">{meta.player_lookup_note}</p>
         </details>}
       </div>

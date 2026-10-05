@@ -18,7 +18,7 @@ export default function GamesPage() {
   const requestedDate = params.get("date") ?? "";
   const season = /^\d{4}-\d{2}$/.test(requestedSeason) ? requestedSeason : "";
   const team = TEAMS.includes(requestedTeam) ? requestedTeam : "";
-  const seasonType = requestedType === "Playoffs" ? "Playoffs" : "Regular Season";
+  const seasonType = ["Pre Season", "Regular Season", "Playoffs"].includes(requestedType) ? requestedType : "Regular Season";
   const dateFilter = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : "";
   const [visible, setVisible] = useState(PAGE);
   const selected = params.get("game")?.trim() || null;
@@ -100,8 +100,9 @@ export default function GamesPage() {
               aria-label="Season type"
               className={selectCls}
               value={seasonType}
-              onChange={(e) => updateFilters({ type: e.target.value === "Playoffs" ? "Playoffs" : null })}
+              onChange={(e) => updateFilters({ type: e.target.value === "Regular Season" ? null : e.target.value })}
             >
+              <option>Pre Season</option>
               <option>Regular Season</option>
               <option>Playoffs</option>
             </select>

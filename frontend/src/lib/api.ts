@@ -120,10 +120,11 @@ export const api = {
   investigate: (gameId: string) => get<Investigation>(`/games/${gameId}/investigate`),
   leaders: (p?: Record<string, unknown>) => get<Leader[]>("/league/leaders", p),
   similar: (id: number, p?: Record<string, unknown>) => get<SimilarPlayers>(`/league/similar/${id}`, p),
-  ask: (body: { question: string; mode?: string; context?: Record<string, unknown> }) =>
+  ask: (body: { question: string; mode?: string; context?: Record<string, unknown> }, signal?: AbortSignal) =>
     fetch(`${BASE}/ai/ask`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     }).then((response) => responseJson<AiReport>(response)),
 };

@@ -673,7 +673,7 @@ export interface components {
          * SeasonType
          * @enum {string}
          */
-        SeasonType: "Regular Season" | "Playoffs";
+        SeasonType: "Pre Season" | "Regular Season" | "Playoffs";
         /** ShotExplainerAvailable */
         ShotExplainerAvailable: {
             /**

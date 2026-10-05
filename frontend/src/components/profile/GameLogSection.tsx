@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { pct, signed } from "../../lib/format";
-import { Card, ErrorState, SkeletonCard } from "../ui";
+import { Card, EmptyState, ErrorState, SkeletonCard } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 type SortKey = "date" | "pts" | "reb" | "ast" | "min" | "plus_minus" | "ts_pct";
@@ -16,15 +16,15 @@ export default function GameLogSection({ playerId, filters }: {
   const [sort, setSort] = useState<SortKey>("date");
   const [desc, setDesc] = useState(true);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["gamelog", playerId, apiFilters],
     queryFn: () => api.gamelog(playerId, apiFilters),
   });
 
   if (isLoading) return <SkeletonCard lines={10} />;
-  if (error) return <ErrorState message={(error as Error).message} />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
   const rows = data?.rows ?? [];
-  if (!rows.length) return <ErrorState message="No games match these filters." />;
+  if (!rows.length) return <EmptyState message="No games match these filters." />;
 
   const sorted = [...rows].sort((a, b) => {
     if (sort === "date") return desc ? (a.date < b.date ? 1 : -1) : (a.date > b.date ? 1 : -1);

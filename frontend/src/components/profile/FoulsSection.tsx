@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { num, pct } from "../../lib/format";
-import { Card, CardTitle, ErrorState, SkeletonCard, StatTile } from "../ui";
+import { Card, CardTitle, EmptyState, ErrorState, SkeletonCard, StatTile } from "../ui";
 import type { ProfileFilters } from "./FilterBar";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -17,7 +17,7 @@ export default function FoulsSection({ playerId, filters }: {
   playerId: number;
   filters: ProfileFilters;
 }) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["fouls", playerId, filters.season, filters.season_type],
     queryFn: () => api.fouls(playerId, {
       season: filters.season, season_type: filters.season_type,
@@ -35,8 +35,8 @@ export default function FoulsSection({ playerId, filters }: {
       </div>
     );
   }
-  if (error) return <ErrorState message={(error as Error).message} />;
-  if (!data?.games) return <ErrorState message="No games for this selection." />;
+  if (error) return <ErrorState message={(error as Error).message} onRetry={() => void refetch()} />;
+  if (!data?.games) return <EmptyState message="No games for this selection." />;
 
   const types: Record<string, number> = data.foul_types_recent?.counts ?? {};
   const typeTotal = Object.values(types).reduce((sum, count) => sum + count, 0);
