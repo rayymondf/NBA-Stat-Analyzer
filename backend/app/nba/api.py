@@ -22,7 +22,7 @@ from nba_api.stats.endpoints import (
     teamplayeronoffdetails,
 )
 
-from .client import fetch
+from .client import cached, fetch
 from .seasons import current_season
 
 REGULAR = "Regular Season"
@@ -241,3 +241,25 @@ def find_team_games(season: str, season_type: str = REGULAR) -> list[dict]:
         league_id_nullable="00",
     )
     return data.get("LeagueGameFinderResults", [])
+
+
+def cached_latest_team_game_date(season: str) -> str | None:
+    """Latest completed game date already present in the fresh local cache.
+
+    This is intentionally cache-only: metadata is part of the startup path and
+    must never queue NBA.com traffic merely to display a freshness label.
+    """
+    latest: str | None = None
+    for season_type in ("Pre Season", REGULAR, PLAYOFFS):
+        data = cached(
+            leaguegamefinder.LeagueGameFinder,
+            player_or_team_abbreviation="T",
+            season_nullable=season,
+            season_type_nullable=season_type,
+            league_id_nullable="00",
+        )
+        for row in (data or {}).get("LeagueGameFinderResults", []):
+            value = row.get("GAME_DATE")
+            if value and (latest is None or str(value) > latest):
+                latest = str(value)[:10]
+    return latest

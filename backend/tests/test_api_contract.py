@@ -85,8 +85,41 @@ def test_invalid_route_parameters_return_problem_details():
 
     impossible_season = client.get("/api/v1/players/1/summary?season=2025-99")
     assert impossible_season.status_code == 422
+    future_season = client.get("/api/v1/players/1/summary?season=2099-00")
+    assert future_season.status_code == 422
     blank_search = client.get("/api/v1/players/search?q=%20%20")
     assert blank_search.status_code == 422
+
+
+def test_meta_is_fast_local_metadata_and_advertises_preseason(monkeypatch):
+    monkeypatch.setattr("app.routers.league.current_season", lambda: "2026-27")
+    monkeypatch.setattr("app.routers.league.api.cached_latest_team_game_date", lambda _season: "2026-10-12")
+    response = client.get("/api/v1/meta")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["season_types"] == ["Pre Season", "Regular Season", "Playoffs"]
+    assert payload["data_through"] == "2026-10-12"
+
+
+def test_meta_allows_cold_cache_without_an_upstream_call(monkeypatch):
+    monkeypatch.setattr("app.routers.league.api.cached_latest_team_game_date", lambda _season: None)
+    response = client.get("/api/v1/meta")
+    assert response.status_code == 200
+    assert response.json()["data_through"] is None
+
+
+def test_player_routes_accept_preseason_season_type(monkeypatch):
+    monkeypatch.setattr(
+        "app.routers.players.players.summary",
+        lambda player_id, season, season_type: {
+            "player_id": player_id, "season": season, "season_type": season_type,
+        },
+    )
+    response = client.get(
+        "/api/v1/players/1/summary?season=2026-27&season_type=Pre%20Season"
+    )
+    assert response.status_code == 200
+    assert response.json()["season_type"] == "Pre Season"
 
 
 def test_date_range_validation_is_safe():
@@ -121,6 +154,22 @@ def test_oversized_request_is_rejected_before_json_parsing():
     )
     assert response.status_code == 413
     assert response.json()["detail"] == "Request body exceeds the configured limit."
+
+
+def test_ai_context_rejects_boolean_player_id_and_future_season():
+    boolean_id = client.post("/api/v1/ai/ask", json={
+        "question": "How is he playing?", "context": {"player_id": True},
+    })
+    assert boolean_id.status_code == 422
+    assert "context.player_id" in boolean_id.json()["detail"]
+
+    future = client.post("/api/v1/ai/ask", json={
+        "question": "How is he playing?", "context": {
+            "player_id": 23, "season": "2027-28", "season_type": "Pre Season",
+        },
+    })
+    assert future.status_code == 422
+    assert "context.season" in future.json()["detail"]
 
 
 def test_oversized_chunked_request_is_rejected_by_actual_bytes():

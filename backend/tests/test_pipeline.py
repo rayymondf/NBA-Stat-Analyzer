@@ -10,7 +10,7 @@ from app.pipeline import DatasetManifest, DatasetValidationError, build_parquet,
 from app.pipeline.artifacts import artifact_index, publish_local
 from app.pipeline.cli import main
 from app.pipeline.dataset import query_parquet
-from app.pipeline.ingest import combine_raw, ingest_shots
+from app.pipeline.ingest import IngestionError, combine_raw, ingest_shots
 
 
 def _source(rows: int = 4) -> pd.DataFrame:
@@ -209,3 +209,75 @@ def test_current_season_partitions_expire_without_refetching_closed_seasons(
     current_metadata.write_text(json.dumps(metadata))
     ingest_shots(["2025-26", "2024-25"], raw)
     assert calls == ["2025-26", "2024-25", "2025-26"]
+
+
+def test_ingestion_defers_current_season_until_known_regular_season_start(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr("app.pipeline.ingest.current_season", lambda: "2026-27")
+    monkeypatch.setattr("app.pipeline.ingest.static_teams.get_teams", lambda: [{"id": 1}])
+    calls: list[tuple[object, ...]] = []
+
+    def fake_chart(*args, **kwargs):
+        calls.append((*args, *kwargs.values()))
+        raise AssertionError("pre-opening regular season must not call NBA.com")
+
+    monkeypatch.setattr("app.pipeline.ingest.api.team_shot_chart", fake_chart)
+
+    result = ingest_shots(["2026-27"], tmp_path / "raw", today=pd.Timestamp("2026-10-05").date())
+
+    summary = json.loads((tmp_path / "raw" / "ingestion.json").read_text())
+    assert result.rows == 0
+    assert result.fetched_partitions == 0
+    assert result.empty_partitions == 0
+    assert result.paths == []
+    assert calls == []
+    assert result.deferred_seasons == [{
+        "season": "2026-27", "regular_season_starts": "2026-10-20"
+    }]
+    assert summary["season_status"] == {"2026-27": "regular_season_not_started"}
+    with pytest.raises(ValueError, match="No non-empty raw partitions"):
+        combine_raw(result.paths, tmp_path / "combined.parquet")
+
+
+def test_ingestion_records_empty_partitions_after_regular_season_start(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.setattr("app.pipeline.ingest.current_season", lambda: "2026-27")
+    monkeypatch.setattr(
+        "app.pipeline.ingest.static_teams.get_teams", lambda: [{"id": 1}, {"id": 2}]
+    )
+    monkeypatch.setattr("app.pipeline.ingest.api.team_shot_chart", lambda *_args, **_kwargs: [])
+
+    result = ingest_shots(["2026-27"], tmp_path / "raw", today=pd.Timestamp("2026-10-20").date())
+
+    summary = json.loads((tmp_path / "raw" / "ingestion.json").read_text())
+    assert result.empty_partitions == 2
+    assert result.deferred_seasons == []
+    assert summary["season_status"] == {"2026-27": "no_regular_season_games_yet"}
+
+
+def test_ingestion_persists_failed_partition_diagnostics(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("app.pipeline.ingest.current_season", lambda: "2026-27")
+    monkeypatch.setattr(
+        "app.pipeline.ingest.static_teams.get_teams", lambda: [{"id": 1}, {"id": 2}]
+    )
+
+    def fake_chart(team_id: int, *_args, **_kwargs):
+        if team_id == 1:
+            raise RuntimeError("upstream unavailable")
+        return _source(2).assign(TEAM_ID=team_id).to_dict("records")
+
+    monkeypatch.setattr("app.pipeline.ingest.api.team_shot_chart", fake_chart)
+    raw = tmp_path / "raw"
+    with pytest.raises(IngestionError, match="2026-27/team=1"):
+        ingest_shots(["2026-27"], raw, today=pd.Timestamp("2026-10-20").date())
+
+    summary = json.loads((raw / "ingestion.json").read_text())
+    assert summary["failed_partitions"] == [{
+        "season": "2026-27",
+        "team_id": 1,
+        "error_type": "RuntimeError",
+        "message": "upstream unavailable",
+    }]
+    assert summary["season_status"] == {"2026-27": "failed"}

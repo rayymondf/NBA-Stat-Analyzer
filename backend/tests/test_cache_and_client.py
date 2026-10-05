@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from app.exceptions import UpstreamServiceError
-from app.nba import cache, client
+from app.nba import api, cache, client
 
 
 @pytest.fixture
@@ -85,6 +85,40 @@ def test_client_caches_success(isolated_cache, monkeypatch):
     second = client.fetch(SuccessfulEndpoint, season="2024-25")
     assert first == second
     assert SuccessfulEndpoint.calls == 1
+
+
+def test_future_season_cache_entries_expire(isolated_cache):
+    assert client.ttl_for({"season": "2027-28"}) == cache.CURRENT_SEASON_TTL
+
+
+def test_cache_only_read_does_not_instantiate_endpoint(isolated_cache):
+    client.reset_runtime_state()
+    SuccessfulEndpoint.calls = 0
+    assert client.cached(SuccessfulEndpoint, season="2026-27") is None
+    assert SuccessfulEndpoint.calls == 0
+
+    client.fetch(SuccessfulEndpoint, season="2026-27")
+    assert client.cached(SuccessfulEndpoint, season="2026-27") == {"Rows": [{"ok": True}]}
+    assert SuccessfulEndpoint.calls == 1
+
+
+def test_cached_latest_game_date_uses_fresh_local_responses_only(isolated_cache):
+    pre_params = {
+        "player_or_team_abbreviation": "T", "season_nullable": "2026-27",
+        "season_type_nullable": "Pre Season", "league_id_nullable": "00",
+    }
+    regular_params = {**pre_params, "season_type_nullable": "Regular Season"}
+    cache.set(
+        client.cache_key(api.leaguegamefinder.LeagueGameFinder, **pre_params),
+        {"LeagueGameFinderResults": [{"GAME_DATE": "2026-10-11"}]},
+        cache.CURRENT_SEASON_TTL,
+    )
+    cache.set(
+        client.cache_key(api.leaguegamefinder.LeagueGameFinder, **regular_params),
+        {"LeagueGameFinderResults": [{"GAME_DATE": "2026-10-20"}]},
+        cache.CURRENT_SEASON_TTL,
+    )
+    assert api.cached_latest_team_game_date("2026-27") == "2026-10-20"
 
 
 def test_client_serves_stale_after_retries(isolated_cache, monkeypatch):

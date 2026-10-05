@@ -22,7 +22,7 @@ SMALL_SAMPLE_GAMES = 15
 SEASON_RE = re.compile(r"^(\d{4})-(\d{2})$")
 TEAM_RE = re.compile(r"^[A-Z]{2,4}$")
 GAME_ID_RE = re.compile(r"^\d{10}$")
-SEASON_TYPES = {"Regular Season", "Playoffs"}
+SEASON_TYPES = {"Pre Season", "Regular Season", "Playoffs"}
 LEAGUE_QUERY_KINDS = {
     "leaders", "improvers", "low_minutes_efficient", "team_defense",
 }

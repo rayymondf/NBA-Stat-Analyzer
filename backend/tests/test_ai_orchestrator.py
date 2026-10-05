@@ -18,6 +18,32 @@ class OrchestratorTests(unittest.TestCase):
         self.assertLess(len(orchestrator.tools_for_mode("compare")), len(tools.ALL_TOOLS))
         self.assertEqual(orchestrator.tools_for_mode("auto"), tools.ALL_TOOLS)
 
+    def test_auto_mode_uses_compact_route_for_player_context(self):
+        self.assertEqual(
+            orchestrator._effective_mode("How efficient has he been?", "auto", {"player_id": 23}),
+            "player",
+        )
+        self.assertEqual(
+            orchestrator._effective_mode("Compare them", "auto", None), "compare"
+        )
+
+    @patch("app.ai.orchestrator._store_report")
+    @patch("app.ai.orchestrator._generate_report")
+    @patch("app.ai.orchestrator._cached_report", return_value=None)
+    def test_player_context_does_not_prefetch_before_timed_generation(
+            self, _cached, generate, _store):
+        generate.return_value = {"answer_markdown": "ok"}
+        with patch("app.ai.orchestrator.tools.get_player_stats") as stats:
+            orchestrator.ask("Is he efficient?", "auto", {
+                "player_id": 23, "season": "2026-27", "season_type": "Pre Season",
+            })
+        stats.assert_not_called()
+        self.assertEqual(generate.call_args.args[1], "player")
+
+    def test_preseason_is_valid_for_ai_tools(self):
+        self.assertEqual(tools._season_type("Pre Season"), "Pre Season")
+
+
     def test_cache_key_normalizes_question_case_and_whitespace(self):
         first = orchestrator._cache_key(" Is  Tatum efficient? ", "claim", None, "model")
         second = orchestrator._cache_key("is tatum EFFICIENT?", "claim", {}, "model")

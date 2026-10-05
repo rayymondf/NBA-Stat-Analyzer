@@ -137,6 +137,21 @@ def test_xfg_v3_training_evaluation_and_gated_promotion(tmp_path: Path, monkeypa
     assert len(checksum) == 64
 
 
+def test_promotion_gate_fails_closed_when_a_critical_slice_is_insufficient(monkeypatch):
+    monkeypatch.setattr("app.services.ml._team_abbr", lambda: {1610612761: "TOR"})
+    frame = _training_data(games=20, shots_per_game=30)
+    frame["SHOT_DISTANCE"] = 10
+    frame["SHOT_TYPE"] = "2PT Field Goal"
+    frame["SHOT_ZONE_BASIC"] = "Mid-Range"
+
+    result = train_xfg(frame, dataset_version="shots-v1-fixture", bootstrap_iterations=20)
+
+    checks = result.evaluation["promotion"]["slice_checks"]
+    assert any(check["status"] == "insufficient" for check in checks)
+    assert result.evaluation["promotion"]["critical_slices_passed"] is False
+    assert result.promoted is False
+
+
 
 def test_log_mlflow_records_run_metrics_and_registers_on_gate_pass(tmp_path, monkeypatch):
     mlflow = pytest.importorskip("mlflow")

@@ -36,6 +36,8 @@ from ..services.ml import FEATURE_COLUMNS, build_features
 from .manifest import sha256_file
 
 RANDOM_SEED = 42
+PERMUTATION_IMPORTANCE_JOBS = 1
+CRITICAL_SLICE_MIN_SHOTS = 100
 
 
 def _runtime_versions() -> dict[str, Any]:
@@ -464,7 +466,9 @@ def _feature_importance(
         scoring="neg_brier_score",
         n_repeats=3,
         random_state=RANDOM_SEED,
-        n_jobs=-1,
+        # Parallel worker pools are unreliable in constrained CI and add little
+        # value for this deliberately bounded (10k-row, 3-repeat) calculation.
+        n_jobs=PERMUTATION_IMPORTANCE_JOBS,
     )
     order = np.argsort(importance.importances_mean)[::-1][:15]
     return [
@@ -573,7 +577,7 @@ def slice_promotion_checks(
     }
     rows = []
     for name, mask in masks.items():
-        if mask.sum() < 100 or np.unique(y[mask]).size < 2:
+        if mask.sum() < CRITICAL_SLICE_MIN_SHOTS or np.unique(y[mask]).size < 2:
             rows.append({"slice": name, "shots": int(mask.sum()), "status": "insufficient"})
             continue
         candidate_metrics = classification_metrics(y[mask], candidate[mask])
@@ -674,7 +678,9 @@ def train_xfg(
     slice_checks = slice_promotion_checks(
         test_frame, test_features, test_y, test_probability, baseline_probability
     )
-    slices_passed = not any(row["status"] == "failed" for row in slice_checks)
+    # A critical slice without enough observations is not evidence that a
+    # candidate is safe to promote. Record it and fail closed.
+    slices_passed = all(row["status"] == "passed" for row in slice_checks)
 
     oof_index, oof_probability = rolling_oof_predictions(
         fitted[winner.name], frame, features, y, before=split.test_from
@@ -714,6 +720,7 @@ def train_xfg(
             "passed": promoted,
             "paired_metrics_passed": paired_passed,
             "critical_slices_passed": slices_passed,
+            "critical_slice_min_shots": CRITICAL_SLICE_MIN_SHOTS,
             "rules": tolerances,
             "slice_checks": slice_checks,
         },

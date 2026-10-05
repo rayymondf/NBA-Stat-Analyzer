@@ -1,16 +1,82 @@
 """Player search, bio, summary card, and filtered stat bundles."""
+import copy
 import difflib
+import threading
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pandas as pd
 from nba_api.stats.static import players as static_players
 
 from ..nba import api
-from ..nba.seasons import current_season, forward_roster_season
+from ..nba.seasons import current_season, forward_roster_season, is_current_or_future_season
 from . import frames, percentiles
 
 HEADSHOT_URL = "https://cdn.nba.com/headshots/nba/latest/1040x760/{pid}.png"
 
 POSITION_LABEL = {"G": "guards", "F": "forwards", "C": "centers"}
+
+# The NBA client already coalesces individual upstream calls.  These small
+# process-local caches avoid repeating the dataframe assembly and roster merge
+# for the hot search and summary paths. Current-season derived values last at
+# most five minutes, so they cannot extend the NBA client's 12-hour freshness
+# window (or hide its bounded stale-if-error result).
+_runtime_lock = threading.Lock()
+_key_locks_guard = threading.Lock()
+_key_locks: dict[object, tuple[threading.Lock, int]] = {}
+_lookup_cache: dict[str, tuple[float | None, list[dict]]] = {}
+_summary_cache: dict[tuple[int, str, str], tuple[float | None, dict]] = {}
+_MAX_RUNTIME_CACHE_ENTRIES = 256
+DERIVED_CURRENT_SEASON_TTL = 5 * 60
+
+
+def _expires_at(season: str) -> float | None:
+    return time.monotonic() + DERIVED_CURRENT_SEASON_TTL if is_current_or_future_season(season) else None
+
+
+def _cached_value(store: dict, key: object) -> object | None:
+    with _runtime_lock:
+        entry = store.get(key)
+        if entry is None:
+            return None
+        expires_at, value = entry
+        if expires_at is not None and time.monotonic() >= expires_at:
+            store.pop(key, None)
+            return None
+        return copy.deepcopy(value)
+
+
+def _store_value(store: dict, key: object, season: str, value: object) -> None:
+    if key not in store and len(store) >= _MAX_RUNTIME_CACHE_ENTRIES:
+        store.pop(next(iter(store)))
+    store[key] = (_expires_at(season), copy.deepcopy(value))
+
+
+@contextmanager
+def _runtime_key_lock(key: object) -> Iterator[None]:
+    """Coalesce one derived result without serializing unrelated players."""
+    with _key_locks_guard:
+        lock, users = _key_locks.get(key, (threading.Lock(), 0))
+        _key_locks[key] = (lock, users + 1)
+    lock.acquire()
+    try:
+        yield
+    finally:
+        lock.release()
+        with _key_locks_guard:
+            active_lock, users = _key_locks.get(key, (lock, 1))
+            if active_lock is lock and users <= 1:
+                _key_locks.pop(key, None)
+            elif active_lock is lock:
+                _key_locks[key] = (lock, users - 1)
+
+
+def clear_runtime_caches() -> None:
+    """Clear derived caches; used by tests and application maintenance."""
+    with _runtime_lock:
+        _lookup_cache.clear()
+        _summary_cache.clear()
 
 
 def player_lookup_index(season: str | None = None) -> list[dict]:
@@ -22,6 +88,21 @@ def player_lookup_index(season: str | None = None) -> list[dict]:
     team, position and jersey data and includes newly added players.
     """
     season = season or current_season()
+    if (cached := _cached_value(_lookup_cache, season)) is not None:
+        return cached  # type: ignore[return-value]
+
+    # Serialize only cache misses. This gives concurrent type-ahead requests
+    # one roster merge and one upstream index request instead of a stampede.
+    with _runtime_key_lock(("lookup", season)):
+        if (cached := _cached_value(_lookup_cache, season)) is not None:
+            return cached  # type: ignore[return-value]
+        result = _build_player_lookup_index(season)
+        with _runtime_lock:
+            _store_value(_lookup_cache, season, season, result)
+        return result
+
+
+def _build_player_lookup_index(season: str) -> list[dict]:
     merged: dict[int, dict] = {}
     for row in api.player_index(season):
         item = dict(row)
@@ -201,6 +282,20 @@ def _blurb(name: str, agg: dict, pcts: dict, pos_group: str) -> str:
 def summary(player_id: int, season: str | None = None,
             season_type: str = "Regular Season") -> dict:
     season = season or current_season()
+    cache_key = (player_id, season, season_type)
+    if (cached := _cached_value(_summary_cache, cache_key)) is not None:
+        return cached  # type: ignore[return-value]
+
+    with _runtime_key_lock(("summary", cache_key)):
+        if (cached := _cached_value(_summary_cache, cache_key)) is not None:
+            return cached  # type: ignore[return-value]
+        result = _build_summary(player_id, season, season_type)
+        with _runtime_lock:
+            _store_value(_summary_cache, cache_key, season, result)
+        return result
+
+
+def _build_summary(player_id: int, season: str, season_type: str) -> dict:
     info = bio(player_id)
     df = frames.merged_logs(player_id, season, season_type)
     agg = frames.aggregate(df)

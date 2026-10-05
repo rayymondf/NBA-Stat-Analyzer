@@ -7,6 +7,7 @@ data scope and entity links.
 """
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -26,10 +27,10 @@ from . import tools
 
 VERDICTS = ["Supported", "Mostly supported", "Mixed", "Misleading",
             "Not supported", "Insufficient evidence"]
-PROMPT_VERSION = "2026-07-18.1"
+PROMPT_VERSION = "2026-10-05.1"
 DEFAULT_CACHE_TTL_SECONDS = 12 * 3600
-DEFAULT_MAX_OUTPUT_TOKENS = 1600
-DEFAULT_MAX_REMOTE_CALLS = 4
+DEFAULT_MAX_OUTPUT_TOKENS = 800
+DEFAULT_MAX_REMOTE_CALLS = 2
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 25
 DEFAULT_GLOBAL_REPORTS_PER_MINUTE = 8
 
@@ -89,20 +90,17 @@ Rules:
 - Tone: sharp, neutral basketball analyst. Briefly explain advanced stats on
   first use. Never use em dashes; use commas, colons, or periods.
 
-The response schema is enforced separately. Write 2-6 short paragraphs or
-bullets in answer_markdown, use null verdict outside claim checks, put exact
-supporting numbers in key_findings, include honest caveats in counterevidence,
-fully populate data_scope, and include a link for every player and game you
-analyzed."""
+The response schema is enforced separately. Write 1-3 short paragraphs or
+bullets in answer_markdown and at most 3 key findings and 2 counterevidence
+items. Use null verdict outside claim checks, put exact supporting numbers in
+key_findings, fully populate data_scope, and link every analyzed player/game."""
 
 
 _TOOLS_BY_MODE = {
     "player": [
         tools.search_player, tools.get_player_stats,
         tools.get_player_percentiles, tools.get_shot_profile, tools.get_trends,
-        tools.get_career, tools.find_similar_players, tools.get_game_log,
-        tools.get_on_off_impact, tools.get_previous_season,
-        tools.get_elimination_game_stats, tools.get_shot_quality,
+        tools.get_game_log, tools.get_previous_season, tools.get_shot_quality,
     ],
     "claim": [
         tools.search_player, tools.get_player_stats,
@@ -118,6 +116,9 @@ _TOOLS_BY_MODE = {
     ],
     "game": [tools.list_games, tools.investigate_game],
 }
+
+_COMPARISON_RE = re.compile(r"\b(compare|versus|vs\.?|better than)\b", re.I)
+log = logging.getLogger(__name__)
 
 _request_locks: dict[str, tuple[threading.Lock, int]] = {}
 _request_locks_guard = threading.Lock()
@@ -237,7 +238,7 @@ def _usage(response) -> dict:
     }
 
 
-def _client():
+def _client(timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS):
     from google import genai
     from google.genai import types
 
@@ -246,9 +247,10 @@ def _client():
         raise AiUnavailable(
             "No Gemini API key configured. Add GEMINI_API_KEY to backend/.env "
             "(free key: https://aistudio.google.com → Get API key).")
-    timeout_ms = _positive_int_env(
-        "AI_REQUEST_TIMEOUT_SECONDS", DEFAULT_REQUEST_TIMEOUT_SECONDS
-    ) * 1000
+    timeout_ms = max(1, int(min(
+        timeout_seconds,
+        _positive_int_env("AI_REQUEST_TIMEOUT_SECONDS", DEFAULT_REQUEST_TIMEOUT_SECONDS),
+    ) * 1000))
     return genai.Client(
         api_key=key,
         http_options=types.HttpOptions(
@@ -305,11 +307,29 @@ def _response_text(response) -> str:
     return "".join(chunks)
 
 
+def _effective_mode(question: str, mode: str, context: dict | None) -> str:
+    if mode != "auto":
+        return mode
+    if context and context.get("game_id"):
+        return "game"
+    if _COMPARISON_RE.search(question):
+        return "compare"
+    if context and isinstance(context.get("player_id"), int):
+        return "player"
+    return "claim"
+
+
 def _generate_report(question: str, mode: str, context: dict | None,
-                     requested_model: str) -> dict:
+                     requested_model: str, *, deadline: float) -> dict:
     from google.genai import errors, types
 
-    client = _client()
+    started = time.monotonic()
+    # Do not synchronously call application services before Gemini. Those calls
+    # can miss the NBA cache and block longer than the shared 25-second budget.
+    # The SDK invokes the compact, mode-specific tools inside its timed request.
+    prefetch_ms = 0.0
+    if deadline - time.monotonic() <= 0:
+        raise AiRateLimited("AI Mode exceeded its 25-second request budget. Try again shortly.")
     model = requested_model
 
     prompt_parts = [f"Investigation type: {mode}." if mode != "auto" else "",
@@ -327,10 +347,10 @@ def _generate_report(question: str, mode: str, context: dict | None,
     # separate free-tier request, so aliases and retired 2.x models are omitted.
     candidates = [model, "gemini-3.1-flash-lite"]
     available_tools = tools_for_mode(mode)
-    max_remote_calls = _positive_int_env(
-        "AI_MAX_REMOTE_CALLS", DEFAULT_MAX_REMOTE_CALLS)
-    max_output_tokens = _positive_int_env(
-        "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS)
+    max_remote_calls = min(_positive_int_env(
+        "AI_MAX_REMOTE_CALLS", DEFAULT_MAX_REMOTE_CALLS), DEFAULT_MAX_REMOTE_CALLS)
+    max_output_tokens = min(_positive_int_env(
+        "AI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS), DEFAULT_MAX_OUTPUT_TOKENS)
     thinking_level = os.environ.get("AI_THINKING_LEVEL", "low").lower()
     if thinking_level not in {"minimal", "low", "medium", "high"}:
         thinking_level = "low"
@@ -338,22 +358,28 @@ def _generate_report(question: str, mode: str, context: dict | None,
 
     def _attempt(candidate: str):
         nonlocal model_attempts
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AiRateLimited("AI Mode exceeded its 25-second request budget. Try again shortly.")
         model_attempts += 1
-        return client.models.generate_content(
+        config = {
+            "system_instruction": system,
+            "response_mime_type": "application/json",
+            "response_schema": ReportPayload,
+            "max_output_tokens": max_output_tokens,
+            "thinking_config": types.ThinkingConfig(thinking_level=thinking_level),
+            "temperature": 0.2,
+        }
+        if available_tools:
+            config["tools"] = available_tools
+            config["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(
+                maximum_remote_calls=max_remote_calls)
+        # Build the SDK client per attempt so a fallback only receives the
+        # time left in the request's shared deadline, never a fresh 25 seconds.
+        return _client(remaining).models.generate_content(
             model=candidate,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system,
-                tools=available_tools,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                    maximum_remote_calls=max_remote_calls),
-                response_mime_type="application/json",
-                response_schema=ReportPayload,
-                max_output_tokens=max_output_tokens,
-                thinking_config=types.ThinkingConfig(
-                    thinking_level=thinking_level),
-                temperature=0.2,
-            ),
+            config=types.GenerateContentConfig(**config),
         )
 
     response = None
@@ -407,6 +433,16 @@ def _generate_report(question: str, mode: str, context: dict | None,
     report["usage"] = _usage(response)
     report["model_attempts"] = model_attempts
     report["cached"] = False
+    report["performance"] = {
+        "total_ms": round((time.monotonic() - started) * 1000, 1),
+        "prefetch_ms": prefetch_ms,
+        "model_ms": round((time.monotonic() - started) * 1000, 1),
+        "tool_count": len(report["tool_trace"]),
+        "output_token_budget": max_output_tokens,
+    }
+    log.info("ai_report mode=%s model=%s total_ms=%s prefetch_ms=%s tools=%s tokens=%s",
+             mode, model, report["performance"]["total_ms"], prefetch_ms,
+             report["performance"]["tool_count"], report["usage"].get("total_tokens"))
     return report
 
 
@@ -419,28 +455,30 @@ def ask(question: str, mode: str = "auto",
     if mode not in {"auto", "player", "claim", "compare", "game"}:
         raise ValueError(f"unknown AI mode '{mode}'")
 
-    # A game page supplies an exact game ID, so this route is unambiguous and
-    # needs only the two game tools even if the UI is still set to Auto.
-    effective_mode = (
-        "game" if mode == "auto" and context and context.get("game_id") else mode
-    )
+    effective_mode = _effective_mode(question, mode, context)
 
     requested_model = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
     key = _cache_key(question, effective_mode, context, requested_model)
     if hit := _cached_report(key):
+        hit["performance"] = {"total_ms": 0.0, "cache": "hit", "tool_count": 0}
         return hit
 
     # The second cache check makes concurrent duplicates wait for and reuse the
     # first result rather than spending two free-tier requests.
     with _request_lock(key):
         if hit := _cached_report(key):
+            hit["performance"] = {"total_ms": 0.0, "cache": "hit", "tool_count": 0}
             return hit
         if not _ai_slots.acquire(timeout=1):
             raise AiRateLimited("AI Mode is busy. Try again shortly.")
         try:
             _reserve_report_budget()
+            deadline = time.monotonic() + min(
+                _positive_int_env("AI_REQUEST_TIMEOUT_SECONDS", DEFAULT_REQUEST_TIMEOUT_SECONDS),
+                DEFAULT_REQUEST_TIMEOUT_SECONDS,
+            )
             report = _generate_report(
-                question, effective_mode, context, requested_model)
+                question, effective_mode, context, requested_model, deadline=deadline)
             _store_report(key, report)
             return report
         finally:

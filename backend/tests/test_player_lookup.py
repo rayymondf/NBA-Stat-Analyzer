@@ -29,6 +29,9 @@ def row(player_id: int, first: str, last: str, team: str,
 
 
 class PlayerLookupTests(unittest.TestCase):
+    def setUp(self):
+        players.clear_runtime_caches()
+
     def test_season_helpers_cover_offseason_transition(self):
         self.assertEqual(next_season("2025-26"), "2026-27")
         self.assertEqual(forward_roster_season(date(2026, 7, 17)), "2026-27")

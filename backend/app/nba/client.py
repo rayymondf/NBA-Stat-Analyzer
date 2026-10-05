@@ -13,7 +13,7 @@ from ..config import get_settings
 from ..exceptions import UpstreamServiceError
 from ..observability import UPSTREAM_CALLS, UPSTREAM_CIRCUIT
 from . import cache
-from .seasons import is_current_season
+from .seasons import is_current_or_future_season
 
 log = logging.getLogger(__name__)
 
@@ -105,9 +105,23 @@ def _throttle() -> None:
 def ttl_for(params: dict) -> float | None:
     """Use a bounded lifetime when any parameter references the live season."""
     for value in params.values():
-        if isinstance(value, str) and is_current_season(value):
+        if isinstance(value, str) and is_current_or_future_season(value):
             return cache.CURRENT_SEASON_TTL
     return None
+
+
+def cache_key(endpoint_cls, *, raw: bool = False, **params) -> str:
+    """Return the stable key used for an NBA endpoint response."""
+    endpoint_name = endpoint_cls.__name__
+    return f"{endpoint_name}:{'raw:' if raw else ''}" + "&".join(
+        f"{key}={params[key]}" for key in sorted(params)
+    )
+
+
+def cached(endpoint_cls, *, raw: bool = False, **params) -> dict | None:
+    """Read a fresh response without scheduling an upstream request."""
+    value = cache.get(cache_key(endpoint_cls, raw=raw, **params))
+    return value if isinstance(value, dict) else None
 
 
 def fetch(
@@ -123,9 +137,7 @@ def fetch(
     an expired value may be served within the configured stale window.
     """
     endpoint_name = endpoint_cls.__name__
-    key = f"{endpoint_name}:{'raw:' if raw else ''}" + "&".join(
-        f"{key}={params[key]}" for key in sorted(params)
-    )
+    key = cache_key(endpoint_cls, raw=raw, **params)
     if persist_cache:
         hit = cache.get(key)
         if hit is not None:

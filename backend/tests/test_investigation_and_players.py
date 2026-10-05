@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from app.services import frames, game_investigation, players
@@ -128,6 +132,32 @@ def test_player_search_typo_fallback(monkeypatch):
     assert result[0]["name"] == "Damian Lillard"
 
 
+def test_summary_cache_coalesces_and_returns_a_safe_copy(monkeypatch):
+    players.clear_runtime_caches()
+    calls = 0
+    calls_lock = threading.Lock()
+
+    def build(_player_id, season, season_type):
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+        time.sleep(0.05)
+        return {"season": season, "season_type": season_type, "stats": {"games": 1}}
+
+    monkeypatch.setattr(players, "_build_summary", build)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _index: players.summary(1, "2026-27"), range(2)))
+    assert calls == 1
+    results[0]["stats"]["games"] = 0
+    assert players.summary(1, "2026-27")["stats"]["games"] == 1
+
+
+def test_current_season_derived_cache_expires_within_five_minutes(monkeypatch):
+    monkeypatch.setattr(players.time, "monotonic", lambda: 1_000.0)
+    assert players._expires_at("2026-27") == 1_300.0
+    assert players._expires_at("2025-26") is None
+
+
 def test_merged_logs_derives_and_handles_starter_failure(monkeypatch):
     base = [{
         "GAME_ID": "1", "GAME_DATE": "2025-10-20", "MATCHUP": "TOR vs. BOS",
@@ -144,4 +174,3 @@ def test_merged_logs_derives_and_handles_starter_failure(monkeypatch):
 
     monkeypatch.setattr(frames.api, "starter_game_ids", lambda *_a: (_ for _ in ()).throw(RuntimeError()))
     assert frames.merged_logs(1, "2025-26").iloc[0]["STARTED"] is None
-

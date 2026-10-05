@@ -63,7 +63,20 @@ Use the `$nba-release-readiness` skill for the full local gate. Run only the foc
 
 ## Code Review Rules
 
+### Domain correctness
 - Flag random shot-level splits, target leakage, evaluation on tuning data, and unreported slice regressions.
 - Flag model results without dataset version, time boundaries, baseline comparison, and uncertainty.
 - Flag unbounded NBA API retries, cache stampedes, unsafe stale data, leaked upstream details, and unvalidated query inputs.
 - Flag frontend `any`, ad hoc fetches, missing loading/error/empty states, and claims that overstate what the model measures.
+
+### Secrets and supply chain
+- Flag any secret, token, or credential committed to source, logs, fixtures, generated contracts, or docs. A staged `.env` or key file is a blocker.
+- Flag unpinned, newly added, or suspicious (possible typosquat) dependencies, and any ignored `npm audit --audit-level=high` or Python advisory. New deps use exact pins and a known, maintained package.
+
+### Performance and efficiency
+- Flag N+1 or redundant NBA.com calls, repeated full-dataframe passes, unbounded in-memory accumulation, and missing pagination/limits on large result sets.
+- Flag frontend bundle-size regressions, unnecessary re-renders, and non-lazy heavy routes/charts. Measure before claiming a regression; cite the number.
+
+### MCP and async safety
+- Flag an MCP tool that bypasses the cached NBA client, recomputes statistics the services already own, widens its write scope, or drops a tool's read-only annotation.
+- Flag blocking I/O on the async event loop, unguarded shared mutable state, and lock/semaphore use that can deadlock or starve under concurrency.

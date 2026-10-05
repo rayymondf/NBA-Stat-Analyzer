@@ -131,6 +131,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             "rows": ingestion_result.rows,
             "fetched_partitions": ingestion_result.fetched_partitions,
             "reused_partitions": ingestion_result.reused_partitions,
+            "empty_partitions": ingestion_result.empty_partitions,
+            "failed_partitions": ingestion_result.failed_partitions,
+            "deferred_seasons": ingestion_result.deferred_seasons,
         }, indent=2))
     elif args.command == "validate":
         print(json.dumps(inspect_dataset(args.input, sample_rows=args.sample_rows).as_dict(), indent=2))

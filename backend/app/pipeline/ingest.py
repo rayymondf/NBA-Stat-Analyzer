@@ -7,7 +7,7 @@ import os
 import re
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -18,12 +18,21 @@ from ..nba.seasons import current_season
 from .manifest import sha256_file
 
 SEASON_PATTERN = re.compile(r"^(\d{4})-(\d{2})$")
+# The 2026-27 NBA regular season opens on October 20, 2026. Unknown seasons
+# deliberately default to ingestion so a stale schedule table cannot hide an
+# upstream outage or missing data after a season has begun.
+REGULAR_SEASON_STARTS = {"2026-27": date(2026, 10, 20)}
 
 
 def _validate_season(season: str) -> None:
     match = SEASON_PATTERN.fullmatch(season)
     if not match or (int(match.group(1)) + 1) % 100 != int(match.group(2)):
         raise ValueError(f"Invalid NBA season: {season!r}; expected YYYY-YY")
+
+
+def _regular_season_started(season: str, *, today: date) -> bool:
+    start = REGULAR_SEASON_STARTS.get(season)
+    return start is None or today >= start
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
@@ -83,7 +92,23 @@ class IngestionResult:
     rows: int
     fetched_partitions: int
     reused_partitions: int
+    empty_partitions: int
+    failed_partitions: list[dict[str, object]]
+    deferred_seasons: list[dict[str, str]]
     paths: list[Path]
+
+
+class IngestionError(RuntimeError):
+    """Raised after persisting diagnostics for one or more failed partitions."""
+
+    def __init__(self, failures: list[dict[str, object]]) -> None:
+        self.failures = failures
+        partitions = ", ".join(
+            f"{failure['season']}/team={failure['team_id']}"
+            for failure in failures[:5]
+        )
+        suffix = "" if len(failures) <= 5 else f" (+{len(failures) - 5} more)"
+        super().__init__(f"Shot ingestion failed for {len(failures)} partition(s): {partitions}{suffix}")
 
 
 def ingest_shots(
@@ -92,14 +117,25 @@ def ingest_shots(
     *,
     force: bool = False,
     refresh_current_after_hours: float = 24,
+    today: date | None = None,
 ) -> IngestionResult:
     """Fetch one team-season partition at a time so interrupted runs resume."""
     for season in seasons:
         _validate_season(season)
+    today = today or date.today()
+    deferred_seasons = [
+        {"season": season, "regular_season_starts": REGULAR_SEASON_STARTS[season].isoformat()}
+        for season in seasons
+        if season == current_season() and not _regular_season_started(season, today=today)
+    ]
+    deferred = {item["season"] for item in deferred_seasons}
     team_ids = sorted(int(team["id"]) for team in static_teams.get_teams())
     paths: list[Path] = []
-    rows = fetched = reused = 0
+    rows = fetched = reused = empty = 0
+    failures: list[dict[str, object]] = []
     for season in seasons:
+        if season in deferred:
+            continue
         for team_id in team_ids:
             partition = raw_dir / f"season={season}" / f"team_id={team_id}"
             path = partition / "shots.parquet"
@@ -121,9 +157,20 @@ def ingest_shots(
                 rows += partition_rows
                 if not is_empty:
                     paths.append(path)
+                else:
+                    empty += 1
                 continue
             else:
-                records = api.team_shot_chart(team_id, season, persist_cache=False)
+                try:
+                    records = api.team_shot_chart(team_id, season, persist_cache=False)
+                except Exception as error:
+                    failures.append({
+                        "season": season,
+                        "team_id": team_id,
+                        "error_type": type(error).__name__,
+                        "message": str(error),
+                    })
+                    continue
                 frame = pd.DataFrame(records)
                 if frame.empty:
                     path.unlink(missing_ok=True)
@@ -137,6 +184,7 @@ def ingest_shots(
                         "ingested_at": datetime.now(UTC).isoformat(),
                     })
                     fetched += 1
+                    empty += 1
                     continue
                 frame["SEASON"] = season
                 frame["INGESTED_AT"] = datetime.now(UTC).isoformat()
@@ -165,16 +213,35 @@ def ingest_shots(
         "partitions": len(paths),
         "fetched_partitions": fetched,
         "reused_partitions": reused,
+        "empty_partitions": empty,
+        "failed_partitions": failures,
+        "deferred_seasons": deferred_seasons,
+        "season_status": {
+            season: (
+                "regular_season_not_started"
+                if season in deferred
+                else "failed"
+                if any(failure["season"] == season for failure in failures)
+                else "complete"
+                if any(path.parent.parent.name == f"season={season}" for path in paths)
+                else "no_regular_season_games_yet"
+                if season == current_season()
+                else "no_data"
+            )
+            for season in seasons
+        },
         "completed_at": datetime.now(UTC).isoformat(),
     }
     _write_json(raw_dir / "ingestion.json", summary)
-    return IngestionResult(rows, fetched, reused, paths)
+    if failures:
+        raise IngestionError(failures)
+    return IngestionResult(rows, fetched, reused, empty, failures, deferred_seasons, paths)
 
 
 def combine_raw(partitions: list[Path], output: Path) -> Path:
     """Combine raw partitions into a validated-build input without index drift."""
     if not partitions:
-        raise ValueError("No raw partitions were provided")
+        raise ValueError("No non-empty raw partitions were provided; inspect ingestion.json for details")
     frame = pd.concat((pd.read_parquet(path) for path in partitions), ignore_index=True)
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")

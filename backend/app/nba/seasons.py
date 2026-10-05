@@ -35,4 +35,16 @@ def is_current_season(season: str) -> bool:
     return season == current_season()
 
 
+def is_current_or_future_season(season: str) -> bool:
+    """Whether a season can still receive new official NBA data.
+
+    Public routes reject future seasons, but this guard also protects internal
+    callers and scripts from storing a future empty response forever.
+    """
+    try:
+        return season_start_year(season) >= season_start_year(current_season())
+    except ValueError:
+        return False
+
+
 DEFAULT_SEASONS = [current_season(), previous_season(current_season())]

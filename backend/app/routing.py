@@ -10,6 +10,7 @@ from pydantic import AfterValidator, BeforeValidator
 
 
 class SeasonType(StrEnum):
+    PRESEASON = "Pre Season"
     REGULAR = "Regular Season"
     PLAYOFFS = "Playoffs"
 
@@ -28,6 +29,12 @@ def _valid_season(value: str) -> str:
     start, end = value.split("-")
     if (int(start) + 1) % 100 != int(end):
         raise ValueError("season must roll forward by one year (for example 2025-26)")
+    # NBA endpoints will often return an empty result for a future season.  Do
+    # not let public requests turn that transient empty response into an
+    # effectively permanent cache entry.
+    current_start = date.today().year if date.today().month >= 10 else date.today().year - 1
+    if int(start) > current_start:
+        raise ValueError("season cannot be later than the current NBA season")
     return value
 
 

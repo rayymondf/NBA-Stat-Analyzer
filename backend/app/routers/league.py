@@ -2,24 +2,13 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 
+from ..nba import api
 from ..nba.seasons import current_season, previous_season
 from ..routing import PlayerId, Season, SeasonType
 from ..schemas import JsonObject, JsonObjectList
-from ..services import compare, game_investigation, league
+from ..services import compare, league
 
 router = APIRouter(tags=["league"])
-
-
-def _latest_game_date(season: str) -> str | None:
-    """Most recent completed game across playoffs + regular season."""
-    for season_type in ("Playoffs", "Regular Season"):
-        try:
-            games = game_investigation.list_games(season, season_type, limit=1)
-        except RuntimeError:
-            continue
-        if games:
-            return str(games[0]["date"])[:10]
-    return None
 
 
 @router.get("/meta", response_model=JsonObject)
@@ -30,13 +19,15 @@ def meta():
     seasons = [cur]
     for _ in range(9):
         seasons.append(previous_season(seasons[-1]))
-    data_through = _latest_game_date(cur)
     return {
         "current_season": cur,
         "seasons": seasons,
         "default_seasons": [cur, previous_season(cur)],
-        "season_types": ["Regular Season", "Playoffs"],
-        "data_through": data_through,
+        "season_types": ["Pre Season", "Regular Season", "Playoffs"],
+        # Metadata must be immediately available at startup. A cache-only
+        # value preserves the useful label after stats have loaded without
+        # making a live NBA request on this critical path.
+        "data_through": api.cached_latest_team_game_date(cur),
         "player_lookup_note": (
             "Player search covers today's NBA players: everyone who has "
             f"played in {cur}, plus current roster players yet to appear "
@@ -44,8 +35,9 @@ def meta():
             "players are not searchable."),
         "freshness_note": (
             f"Official NBA.com statistics for the {seasons[-1]} through "
-            f"{cur} seasons. {cur} stats refresh every 12 hours during the "
-            "season; earlier seasons are complete and will not change. The "
+            f"{cur} seasons. {cur} Pre Season, Regular Season, and Playoffs "
+            "statistics refresh every 12 hours; earlier seasons are complete "
+            "and will not change. The "
             "app rolls forward to each new NBA season automatically every "
             "October."),
     }

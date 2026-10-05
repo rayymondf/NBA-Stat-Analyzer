@@ -519,6 +519,7 @@
       },
       "SeasonType": {
         "enum": [
+          "Pre Season",
           "Regular Season",
           "Playoffs"
         ],
