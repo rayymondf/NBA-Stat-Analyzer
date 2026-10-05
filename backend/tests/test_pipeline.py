@@ -150,11 +150,15 @@ def test_ingestion_is_partitioned_and_resumable(tmp_path: Path, monkeypatch):
         "app.pipeline.ingest.static_teams.get_teams",
         lambda: [{"id": 2}, {"id": 1}],
     )
-    calls: list[tuple[int, str]] = []
+    calls: list[tuple[int, str, str]] = []
 
-    def fake_chart(team_id: int, season: str, *, persist_cache: bool = True):
+    def fake_chart(team_id: int, season: str, *, season_type: str = "Regular Season",
+                   persist_cache: bool = True):
         assert persist_cache is False
-        calls.append((team_id, season))
+        calls.append((team_id, season, season_type))
+        # Regular season has shots; model these two teams as making no playoffs.
+        if season_type != "Regular Season":
+            return []
         frame = _source(2).assign(TEAM_ID=team_id)
         return frame.to_dict("records")
 
@@ -163,9 +167,14 @@ def test_ingestion_is_partitioned_and_resumable(tmp_path: Path, monkeypatch):
     first = ingest_shots(["2025-26"], raw)
     second = ingest_shots(["2025-26"], raw)
 
-    assert first.fetched_partitions == 2
-    assert second.reused_partitions == 2
-    assert calls == [(1, "2025-26"), (2, "2025-26")]
+    # Two teams x (Regular Season with shots + empty Playoffs).
+    assert first.fetched_partitions == 4
+    assert first.empty_partitions == 2
+    assert second.reused_partitions == 4
+    assert calls == [
+        (1, "2025-26", "Regular Season"), (1, "2025-26", "Playoffs"),
+        (2, "2025-26", "Regular Season"), (2, "2025-26", "Playoffs"),
+    ]
     combined = combine_raw(first.paths, tmp_path / "combined.parquet")
     assert len(pd.read_parquet(combined)) == 4
 
@@ -173,7 +182,7 @@ def test_ingestion_is_partitioned_and_resumable(tmp_path: Path, monkeypatch):
     first.paths[0].write_bytes(b"corrupt")
     third = ingest_shots(["2025-26"], raw)
     assert third.fetched_partitions == 1
-    assert len(calls) == 3
+    assert len(calls) == 5
 
 
 def test_ingestion_rejects_path_like_or_impossible_seasons(tmp_path: Path):
@@ -191,24 +200,30 @@ def test_current_season_partitions_expire_without_refetching_closed_seasons(
         "app.pipeline.ingest.static_teams.get_teams",
         lambda: [{"id": 1}],
     )
-    calls: list[str] = []
+    calls: list[tuple[str, str]] = []
 
-    def fake_chart(team_id: int, season: str, *, persist_cache: bool = True):
-        calls.append(season)
+    def fake_chart(team_id: int, season: str, *, season_type: str = "Regular Season",
+                   persist_cache: bool = True):
+        calls.append((season, season_type))
+        if season_type != "Regular Season":
+            return []
         return _source(2).assign(TEAM_ID=team_id).to_dict("records")
 
     monkeypatch.setattr("app.pipeline.ingest.api.team_shot_chart", fake_chart)
     raw = tmp_path / "raw"
     ingest_shots(["2025-26", "2024-25"], raw)
     ingest_shots(["2025-26", "2024-25"], raw)
-    assert calls == ["2025-26", "2024-25"]
+    reg_calls = [season for season, st in calls if st == "Regular Season"]
+    assert reg_calls == ["2025-26", "2024-25"]
 
-    current_metadata = raw / "season=2025-26" / "team_id=1" / "partition.json"
+    current_metadata = (raw / "season=2025-26" / "season_type=regular-season"
+                        / "team_id=1" / "partition.json")
     metadata = json.loads(current_metadata.read_text())
     metadata["ingested_at"] = "2000-01-01T00:00:00+00:00"
     current_metadata.write_text(json.dumps(metadata))
     ingest_shots(["2025-26", "2024-25"], raw)
-    assert calls == ["2025-26", "2024-25", "2025-26"]
+    reg_calls = [season for season, st in calls if st == "Regular Season"]
+    assert reg_calls == ["2025-26", "2024-25", "2025-26"]
 
 
 def test_ingestion_defers_current_season_until_known_regular_season_start(
@@ -252,7 +267,8 @@ def test_ingestion_records_empty_partitions_after_regular_season_start(
     result = ingest_shots(["2026-27"], tmp_path / "raw", today=pd.Timestamp("2026-10-20").date())
 
     summary = json.loads((tmp_path / "raw" / "ingestion.json").read_text())
-    assert result.empty_partitions == 2
+    # 2 teams x (Regular Season + Playoffs), all empty.
+    assert result.empty_partitions == 4
     assert result.deferred_seasons == []
     assert summary["season_status"] == {"2026-27": "no_regular_season_games_yet"}
 
@@ -263,9 +279,12 @@ def test_ingestion_persists_failed_partition_diagnostics(tmp_path: Path, monkeyp
         "app.pipeline.ingest.static_teams.get_teams", lambda: [{"id": 1}, {"id": 2}]
     )
 
-    def fake_chart(team_id: int, *_args, **_kwargs):
-        if team_id == 1:
+    def fake_chart(team_id: int, season: str, *, season_type: str = "Regular Season",
+                   persist_cache: bool = True):
+        if team_id == 1 and season_type == "Regular Season":
             raise RuntimeError("upstream unavailable")
+        if season_type != "Regular Season":
+            return []
         return _source(2).assign(TEAM_ID=team_id).to_dict("records")
 
     monkeypatch.setattr("app.pipeline.ingest.api.team_shot_chart", fake_chart)
@@ -276,6 +295,7 @@ def test_ingestion_persists_failed_partition_diagnostics(tmp_path: Path, monkeyp
     summary = json.loads((raw / "ingestion.json").read_text())
     assert summary["failed_partitions"] == [{
         "season": "2026-27",
+        "season_type": "Regular Season",
         "team_id": 1,
         "error_type": "RuntimeError",
         "message": "upstream unavailable",

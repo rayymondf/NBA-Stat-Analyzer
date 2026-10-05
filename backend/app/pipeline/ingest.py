@@ -23,6 +23,15 @@ SEASON_PATTERN = re.compile(r"^(\d{4})-(\d{2})$")
 # upstream outage or missing data after a season has begun.
 REGULAR_SEASON_STARTS = {"2026-27": date(2026, 10, 20)}
 
+# Shot ingestion covers the completed-game season types the xFG model trains
+# on. Preseason is intentionally excluded (exhibition shot quality is noisy
+# and not what the model represents).
+SEASON_TYPES = ("Regular Season", "Playoffs")
+
+
+def _season_type_slug(season_type: str) -> str:
+    return season_type.lower().replace(" ", "-")
+
 
 def _validate_season(season: str) -> None:
     match = SEASON_PATTERN.fullmatch(season)
@@ -58,11 +67,16 @@ def _reusable_partition(
     *,
     season: str,
     team_id: int,
+    season_type: str = "Regular Season",
     max_age_seconds: float | None = None,
 ) -> tuple[bool, int, bool]:
     try:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         if metadata.get("season") != season or metadata.get("team_id") != team_id:
+            return False, 0, False
+        # Older partitions predate season_type; treat a missing tag as the
+        # historical Regular Season default so they still validate.
+        if metadata.get("season_type", "Regular Season") != season_type:
             return False, 0, False
         if max_age_seconds is not None:
             ingested_at = datetime.fromisoformat(str(metadata["ingested_at"]))
@@ -148,7 +162,11 @@ def ingest_shots(
         if season in deferred:
             continue
         for team_id in team_ids:
-            partition = raw_dir / f"season={season}" / f"team_id={team_id}"
+          for season_type in SEASON_TYPES:
+            partition = (
+                raw_dir / f"season={season}"
+                / f"season_type={_season_type_slug(season_type)}" / f"team_id={team_id}"
+            )
             path = partition / "shots.parquet"
             metadata_path = partition / "partition.json"
             max_age_seconds = (
@@ -161,6 +179,7 @@ def ingest_shots(
                 metadata_path,
                 season=season,
                 team_id=team_id,
+                season_type=season_type,
                 max_age_seconds=max_age_seconds,
             ) if not force else (False, 0, False)
             if reusable:
@@ -173,10 +192,13 @@ def ingest_shots(
                 continue
             else:
                 try:
-                    records = api.team_shot_chart(team_id, season, persist_cache=False)
+                    records = api.team_shot_chart(
+                        team_id, season, season_type=season_type, persist_cache=False
+                    )
                 except Exception as error:
                     failures.append({
                         "season": season,
+                        "season_type": season_type,
                         "team_id": team_id,
                         "error_type": type(error).__name__,
                         "message": str(error),
@@ -184,10 +206,12 @@ def ingest_shots(
                     continue
                 frame = pd.DataFrame(records)
                 if frame.empty:
+                    # A team with no playoff games is normal, not a failure.
                     path.unlink(missing_ok=True)
                     _write_json(metadata_path, {
                         "schema_version": "raw-shot-partition-v1",
                         "season": season,
+                        "season_type": season_type,
                         "team_id": team_id,
                         "rows": 0,
                         "status": "empty",
@@ -198,6 +222,7 @@ def ingest_shots(
                     empty += 1
                     continue
                 frame["SEASON"] = season
+                frame["SEASON_TYPE"] = season_type
                 frame["INGESTED_AT"] = datetime.now(UTC).isoformat()
                 partition.mkdir(parents=True, exist_ok=True)
                 temporary = path.with_suffix(".parquet.tmp")
@@ -207,6 +232,7 @@ def ingest_shots(
                 _write_json(metadata_path, {
                     "schema_version": "raw-shot-partition-v1",
                     "season": season,
+                    "season_type": season_type,
                     "team_id": team_id,
                     "rows": len(frame),
                     "status": "complete",
@@ -216,8 +242,8 @@ def ingest_shots(
                     "ingested_at": datetime.now(UTC).isoformat(),
                 })
                 fetched += 1
-            rows += len(frame)
-            paths.append(path)
+                rows += len(frame)
+                paths.append(path)
 
     raw_dir.mkdir(parents=True, exist_ok=True)
     summary = {
@@ -237,7 +263,7 @@ def ingest_shots(
                 else "failed"
                 if any(failure["season"] == season for failure in failures)
                 else "complete"
-                if any(path.parent.parent.name == f"season={season}" for path in paths)
+                if any(f"season={season}" in path.parts for path in paths)
                 else "no_regular_season_games_yet"
                 if season == current_season()
                 else "no_data"
