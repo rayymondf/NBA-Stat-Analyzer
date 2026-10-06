@@ -149,8 +149,14 @@ still passes).
 1. **Fix the incumbent comparison** so v3-vs-v2 is a true shared-test-fold
    head-to-head (re-featurize/evaluate v2) or fails loudly — never silent naive
    fallback.
-2. **Add predictive signal** the model currently lacks: defender distance /
-   contest, shot-clock, or play-type context — the realistic path to beating v2.
+2. **Add predictive signal** the model lacks (defender distance / contest /
+   shot-clock). RESEARCHED - not feasible at shot level from public data (see
+   docs/RESEARCH_SHOT_CONTEXT.md): the public NBA API exposes these only as
+   per-player aggregate buckets with no GAME_ID to join to shots; the one
+   public shot-level set is a stale 2014-15 leak; current tracking (Second
+   Spectrum / Sportradar) is licensed/paid. Options: keep the honest
+   location+type model; add a descriptive (non-model) contested-shooting view
+   from the aggregate buckets; or license a paid feed for shot-level contest.
 3. **Calibrate within each OOF fold** and derive the player prior only from
    pre-tuning windows, so the percentile surface matches production probabilities.
 4. **Season-type as a modeling or reporting dimension** now that playoffs are in
