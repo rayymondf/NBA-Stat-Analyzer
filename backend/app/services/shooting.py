@@ -117,3 +117,129 @@ def scoring_breakdown(player_id: int, season: str,
         "pct_pts_fastbreak": "PCT_PTS_FB", "pct_pts_off_tov": "PCT_PTS_OFF_TOV",
     }
     return {k: me.get(col) for k, col in pick.items() if me.get(col) is not None}
+
+
+# Closest-defender buckets, ordered tightest -> most open. The NBA labels them
+# e.g. "0-2 Feet - Very Tight"; we match on the leading distance range.
+_DEF_DIST_ORDER = ["0-2 Feet", "2-4 Feet", "4-6 Feet", "6+ Feet"]
+# "Tight" = defender within 4 ft; the contested-shot-making rating is built from
+# these buckets only.
+_TIGHT_RANGES = {"0-2 Feet", "2-4 Feet"}
+_MIN_TIGHT_FGA = 30  # below this, report the rating as low-confidence
+
+
+def _efg(fgm: float, fg3m: float, fga: float) -> float | None:
+    return round((fgm + 0.5 * fg3m) / fga, 3) if fga else None
+
+
+def _dist_key(label: str) -> str:
+    """Map a NBA CLOSE_DEF_DIST_RANGE label to its leading distance bucket."""
+    for key in _DEF_DIST_ORDER:
+        if str(label).startswith(key):
+            return key
+    return str(label)
+
+
+def contested_shooting(player_id: int, season: str,
+                       season_type: str = "Regular Season") -> dict:
+    """Descriptive shooting splits by closest-defender distance.
+
+    Source: NBA public player-tracking summaries (playerdashptshots,
+    ClosestDefenderShooting). These are per-player AGGREGATE buckets, not
+    shot-level records, and describe how well THIS player shoots when guarded
+    closely vs left open (an offensive trait). They are NOT a defensive rating
+    and are NOT inputs to the xFG model.
+
+    Returns normalized buckets (defender-distance range, FGA, frequency, FG%,
+    eFG%) ordered tightest -> most open, plus a descriptive offensive
+    "contested shot-making" rating with honest small-sample caveats.
+    """
+    data = api.player_pt_shots(player_id, season, season_type)
+    rows = data.get("ClosestDefenderShooting", [])
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return {"available": False,
+                "reason": f"No tracking shooting splits for this player in {season}."}
+
+    buckets = []
+    for _, r in df.iterrows():
+        fga = float(r.get("FGA", 0) or 0)
+        if fga <= 0:
+            continue
+        fgm = float(r.get("FGM", 0) or 0)
+        fg3m = float(r.get("FG3M", 0) or 0)
+        buckets.append({
+            "range": _dist_key(r.get("CLOSE_DEF_DIST_RANGE", "")),
+            "label": str(r.get("CLOSE_DEF_DIST_RANGE", "")),
+            "fga": int(fga),
+            "frequency": round(float(r.get("FGA_FREQUENCY", 0) or 0), 3),
+            "fg_pct": round(float(r.get("FG_PCT", 0) or 0), 3),
+            "efg_pct": _efg(fgm, fg3m, fga),
+        })
+    if not buckets:
+        return {"available": False,
+                "reason": f"No shot attempts recorded by defender distance in {season}."}
+
+    order = {key: i for i, key in enumerate(_DEF_DIST_ORDER)}
+    buckets.sort(key=lambda b: order.get(str(b["range"]), 99))
+
+    rating = _contested_rating(buckets)
+    return {
+        "available": True,
+        "season": season,
+        "season_type": season_type,
+        "buckets": buckets,
+        "rating": rating,
+        "source_note": (
+            "NBA player-tracking splits (closest-defender distance). These are "
+            "descriptive aggregate buckets of how this player shoots when guarded "
+            "closely vs open — an offensive trait. They are not a defensive "
+            "rating and are not inputs to the xFG shot-quality model."
+        ),
+    }
+
+
+def _contested_rating(buckets: list[dict]) -> dict:
+    """Descriptive offensive shot-making-under-contest rating from the buckets."""
+    by_range = {b["range"]: b for b in buckets}
+    tight = [by_range[k] for k in _TIGHT_RANGES if k in by_range]
+    open_ = [by_range[k] for k in ("4-6 Feet", "6+ Feet") if k in by_range]
+
+    def _blend(group: list[dict]) -> tuple[float | None, int]:
+        fga = sum(b["fga"] for b in group)
+        if not fga:
+            return None, 0
+        made = sum((b["fg_pct"] or 0) * b["fga"] for b in group)
+        return round(made / fga, 3), fga
+
+    tight_fg, tight_fga = _blend(tight)
+    open_fg, open_fga = _blend(open_)
+    drop = (round(open_fg - tight_fg, 3)
+            if tight_fg is not None and open_fg is not None else None)
+
+    if tight_fg is None:
+        label = "insufficient data"
+    elif tight_fga < _MIN_TIGHT_FGA:
+        label = "low confidence (small sample)"
+    elif tight_fg >= 0.50:
+        label = "elite under tight coverage"
+    elif tight_fg >= 0.45:
+        label = "strong under tight coverage"
+    elif tight_fg >= 0.40:
+        label = "average under tight coverage"
+    else:
+        label = "struggles under tight coverage"
+
+    return {
+        "tight_fg_pct": tight_fg,          # defender within 4 ft
+        "tight_fga": tight_fga,
+        "open_fg_pct": open_fg,            # defender 4+ ft
+        "open_fga": open_fga,
+        "contest_drop": drop,              # open FG% minus tight FG% (>=0 usual)
+        "label": label,
+        "confidence": "low" if tight_fga < _MIN_TIGHT_FGA else "ok",
+        "caveat": (
+            "Descriptive offensive rating from NBA tracking buckets; small "
+            "playoff/early-season samples are noisy. Not a defensive metric."
+        ),
+    }

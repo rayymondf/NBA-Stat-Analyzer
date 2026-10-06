@@ -2494,6 +2494,139 @@
         ]
       }
     },
+    "/api/v1/players/{player_id}/contested-shooting": {
+      "get": {
+        "description": "Descriptive shooting splits by closest-defender distance (NBA tracking).",
+        "operationId": "contested_shooting_api_v1_players__player_id__contested_shooting_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "player_id",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "title": "Player Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "season",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "examples": [
+                    "2025-26"
+                  ],
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Season"
+            }
+          },
+          {
+            "in": "query",
+            "name": "season_type",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SeasonType",
+              "default": "Regular Season"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JsonObject"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Request Entity Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Contested Shooting",
+        "tags": [
+          "players"
+        ]
+      }
+    },
     "/api/v1/players/{player_id}/efficiency": {
       "get": {
         "operationId": "efficiency_dashboard_api_v1_players__player_id__efficiency_get",

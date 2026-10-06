@@ -98,6 +98,13 @@ def shot_quality_splits(player_id: PlayerId, season: Season | None = None):
     return ml.shot_quality_season_splits(player_id, season)
 
 
+@router.get("/{player_id}/contested-shooting", response_model=JsonObject)
+def contested_shooting(player_id: PlayerId, season: Season | None = None,
+                       season_type: SeasonType = SeasonType.REGULAR):
+    """Descriptive shooting splits by closest-defender distance (NBA tracking)."""
+    return shooting.contested_shooting(player_id, season or current_season(), str(season_type))
+
+
 @router.get("/{player_id}/efficiency", response_model=JsonObject)
 def efficiency_dashboard(player_id: PlayerId, season: Season | None = None,
                          season_type: SeasonType = SeasonType.REGULAR):

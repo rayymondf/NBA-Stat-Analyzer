@@ -249,3 +249,59 @@ def test_playoff_elimination_and_closeout(monkeypatch):
     assert result["elimination"]["games"] == 4
     assert result["closeout"]["games"] == 1
     assert result["all_playoffs_baseline"]["games"] == 7
+
+
+def test_contested_shooting_buckets_sorted_and_rated(monkeypatch):
+    from app.services import shooting
+
+    def fake_pt(player_id, season, season_type="Regular Season"):
+        return {"ClosestDefenderShooting": [
+            {"CLOSE_DEF_DIST_RANGE": "6+ Feet - Wide Open", "FGA": 100, "FGM": 52,
+             "FG3M": 20, "FGA_FREQUENCY": 0.30, "FG_PCT": 0.52},
+            {"CLOSE_DEF_DIST_RANGE": "0-2 Feet - Very Tight", "FGA": 60, "FGM": 30,
+             "FG3M": 2, "FGA_FREQUENCY": 0.20, "FG_PCT": 0.50},
+            {"CLOSE_DEF_DIST_RANGE": "2-4 Feet - Tight", "FGA": 80, "FGM": 36,
+             "FG3M": 6, "FGA_FREQUENCY": 0.25, "FG_PCT": 0.45},
+            {"CLOSE_DEF_DIST_RANGE": "4-6 Feet - Open", "FGA": 70, "FGM": 34,
+             "FG3M": 14, "FGA_FREQUENCY": 0.25, "FG_PCT": 0.486},
+        ]}
+
+    monkeypatch.setattr(shooting.api, "player_pt_shots", fake_pt)
+    out = shooting.contested_shooting(1, "2025-26")
+
+    assert out["available"] is True
+    # Buckets ordered tightest -> most open.
+    assert [b["range"] for b in out["buckets"]] == ["0-2 Feet", "2-4 Feet", "4-6 Feet", "6+ Feet"]
+    # eFG weights threes: wide-open bucket (52 FGM incl 20 3PM over 100 FGA).
+    assert out["buckets"][-1]["efg_pct"] == round((52 + 0.5 * 20) / 100, 3)
+    rating = out["rating"]
+    # tight = 0-2 + 2-4 ft: FGA 140, blended FG% = (0.50*60 + 0.45*80)/140
+    assert rating["tight_fga"] == 140
+    assert rating["tight_fg_pct"] == round((0.50 * 60 + 0.45 * 80) / 140, 3)
+    assert rating["open_fga"] == 170
+    assert rating["confidence"] == "ok"
+    assert "defensive" in rating["caveat"].lower()
+    assert "not a defensive rating" in out["source_note"].lower()
+
+
+def test_contested_shooting_unavailable_when_no_rows(monkeypatch):
+    from app.services import shooting
+    monkeypatch.setattr(shooting.api, "player_pt_shots",
+                        lambda *a, **k: {"ClosestDefenderShooting": []})
+    out = shooting.contested_shooting(1, "2025-26")
+    assert out["available"] is False
+    assert "no tracking" in out["reason"].lower()
+
+
+def test_contested_shooting_small_sample_flagged_low_confidence(monkeypatch):
+    from app.services import shooting
+    monkeypatch.setattr(shooting.api, "player_pt_shots", lambda *a, **k: {
+        "ClosestDefenderShooting": [
+            {"CLOSE_DEF_DIST_RANGE": "0-2 Feet - Very Tight", "FGA": 5, "FGM": 3,
+             "FG3M": 0, "FGA_FREQUENCY": 0.5, "FG_PCT": 0.6},
+            {"CLOSE_DEF_DIST_RANGE": "6+ Feet - Wide Open", "FGA": 5, "FGM": 3,
+             "FG3M": 1, "FGA_FREQUENCY": 0.5, "FG_PCT": 0.6},
+        ]})
+    out = shooting.contested_shooting(1, "2025-26")
+    assert out["rating"]["confidence"] == "low"
+    assert "small sample" in out["rating"]["label"]

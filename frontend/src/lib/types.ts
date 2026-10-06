@@ -142,6 +142,37 @@ export interface ShotQualityComparison {
   note: string;
 }
 
+export interface ContestedBucket {
+  range: string;
+  label: string;
+  fga: number;
+  frequency: number;
+  fg_pct: number;
+  efg_pct: number | null;
+}
+
+export interface ContestedRating {
+  tight_fg_pct: number | null;
+  tight_fga: number;
+  open_fg_pct: number | null;
+  open_fga: number;
+  contest_drop: number | null;
+  label: string;
+  confidence: "low" | "ok";
+  caveat: string;
+}
+
+export interface ContestedShootingAvailable {
+  available: true;
+  season: string;
+  season_type: string;
+  buckets: ContestedBucket[];
+  rating: ContestedRating;
+  source_note: string;
+}
+export interface ContestedShootingUnavailable { available: false; reason: string }
+export type ContestedShooting = ContestedShootingAvailable | ContestedShootingUnavailable;
+
 export interface ShotQualitySplits {
   season: string;
   regular_season: ShotQuality;

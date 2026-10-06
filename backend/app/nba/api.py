@@ -15,6 +15,7 @@ from nba_api.stats.endpoints import (
     playerdashboardbyclutch,
     playerdashboardbygamesplits,
     playerdashboardbygeneralsplits,
+    playerdashptshots,
     playergamelogs,
     playerindex,
     playerprofilev2,
@@ -263,3 +264,23 @@ def cached_latest_team_game_date(season: str) -> str | None:
             if value and (latest is None or str(value) > latest):
                 latest = str(value)[:10]
     return latest
+
+
+def player_pt_shots(player_id: int, season: str,
+                    season_type: str = REGULAR) -> dict:
+    """Player tracking shooting splits (closest-defender distance, shot clock,
+    dribbles, touch time) as per-player aggregate buckets.
+
+    These are NBA public tracking summaries, not shot-level records: each result
+    set is bucketed FG%/eFG%/frequency for one player, with no per-shot defender
+    value. Used for the descriptive contested-shooting view, never as a model
+    input.
+    """
+    return fetch(
+        playerdashptshots.PlayerDashPtShots,
+        player_id=player_id,
+        team_id=0,
+        season=season,
+        season_type_all_star=season_type,
+        ttl=12 * 3600,
+    )

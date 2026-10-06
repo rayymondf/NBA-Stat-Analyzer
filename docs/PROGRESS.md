@@ -155,6 +155,26 @@ still passes).
   loading/error/empty states; types regenerated. Gates green (backend 138
   passed; frontend 35 passed, build OK). No /api/v1 break.
 
+### Session: contested-shooting view (descriptive)
+
+Built the honest, public-data version of #2 (a view, not a model feature):
+
+- **Backend:** `api.player_pt_shots` wraps NBA `playerdashptshots`;
+  `shooting.contested_shooting()` normalizes the ClosestDefenderShooting buckets
+  (FG%, eFG%, frequency by defender distance, tightest->open) and derives a
+  descriptive **offensive** shot-making-under-tight-coverage rating (tight vs
+  open FG%, contest drop, label, low-confidence flag under 30 tight FGA).
+  Additive endpoint `GET /players/{id}/contested-shooting` (honors season +
+  season type incl playoffs). 3 tests; gates green (141 passed).
+- **Frontend:** `ContestedShooting` type + `api.contestedShooting`; a new
+  `ContestedShootingChart` analytical component (FG% bars by defender distance +
+  frequency + rating banner) matching the existing chart style, rendered in the
+  Vs-Model view with loading/error/empty states.
+- **Labeling:** explicitly "NBA tracking splits, descriptive, **not a model
+  input and not a defensive rating**" in both the API `source_note` and the UI.
+  This is the ceiling of what public data allows for contest (per #2 research:
+  aggregate buckets only, no per-shot contest, no shot-level model feature).
+
 ## Next iteration
 
 1. **Fix the incumbent comparison** so v3-vs-v2 is a true shared-test-fold
