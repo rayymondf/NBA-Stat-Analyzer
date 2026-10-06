@@ -127,6 +127,14 @@ _DEF_DIST_ORDER = ["0-2 Feet", "2-4 Feet", "4-6 Feet", "6+ Feet"]
 _TIGHT_RANGES = {"0-2 Feet", "2-4 Feet"}
 _MIN_TIGHT_FGA = 30  # below this, report the rating as low-confidence
 
+# Shot-clock buckets, ordered from the start of the clock (24s) down to the
+# final seconds. NBA labels: "24-22", "22-18 Very Early", "18-15 Early",
+# "15-7 Average", "7-4 Late", "4-0 Very Late", plus "ShotClock Off".
+_SHOT_CLOCK_ORDER = [
+    "24-22", "22-18 Very Early", "18-15 Early", "15-7 Average",
+    "7-4 Late", "4-0 Very Late", "ShotClock Off",
+]
+
 
 def _efg(fgm: float, fg3m: float, fga: float) -> float | None:
     return round((fgm + 0.5 * fg3m) / fga, 3) if fga else None
@@ -184,12 +192,14 @@ def contested_shooting(player_id: int, season: str,
     buckets.sort(key=lambda b: order.get(str(b["range"]), 99))
 
     rating = _contested_rating(buckets)
+    shot_clock = _shot_clock_buckets(data.get("ShotClockShooting", []))
     return {
         "available": True,
         "season": season,
         "season_type": season_type,
         "buckets": buckets,
         "rating": rating,
+        "shot_clock": shot_clock,
         "source_note": (
             "NBA player-tracking splits (closest-defender distance). These are "
             "descriptive aggregate buckets of how this player shoots when guarded "
@@ -243,3 +253,28 @@ def _contested_rating(buckets: list[dict]) -> dict:
             "playoff/early-season samples are noisy. Not a defensive metric."
         ),
     }
+
+
+def _shot_clock_buckets(rows: list[dict]) -> list[dict]:
+    """Normalize ShotClockShooting rows into ordered FG%/eFG%/frequency buckets.
+
+    Same descriptive, aggregate NBA tracking data as the defender-distance view:
+    how this player shoots early vs late in the shot clock. Not a model input.
+    """
+    out = []
+    for r in rows:
+        fga = float(r.get("FGA", 0) or 0)
+        if fga <= 0:
+            continue
+        fgm = float(r.get("FGM", 0) or 0)
+        fg3m = float(r.get("FG3M", 0) or 0)
+        out.append({
+            "range": str(r.get("SHOT_CLOCK_RANGE", "")),
+            "fga": int(fga),
+            "frequency": round(float(r.get("FGA_FREQUENCY", 0) or 0), 3),
+            "fg_pct": round(float(r.get("FG_PCT", 0) or 0), 3),
+            "efg_pct": _efg(fgm, fg3m, fga),
+        })
+    order = {key: i for i, key in enumerate(_SHOT_CLOCK_ORDER)}
+    out.sort(key=lambda b: order.get(str(b["range"]), 99))
+    return out

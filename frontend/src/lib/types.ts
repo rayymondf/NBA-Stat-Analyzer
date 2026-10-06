@@ -162,12 +162,21 @@ export interface ContestedRating {
   caveat: string;
 }
 
+export interface ContestedShotClockBucket {
+  range: string;
+  fga: number;
+  frequency: number;
+  fg_pct: number;
+  efg_pct: number | null;
+}
+
 export interface ContestedShootingAvailable {
   available: true;
   season: string;
   season_type: string;
   buckets: ContestedBucket[];
   rating: ContestedRating;
+  shot_clock: ContestedShotClockBucket[];
   source_note: string;
 }
 export interface ContestedShootingUnavailable { available: false; reason: string }

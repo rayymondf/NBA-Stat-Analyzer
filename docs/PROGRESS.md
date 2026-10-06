@@ -155,6 +155,16 @@ still passes).
   loading/error/empty states; types regenerated. Gates green (backend 138
   passed; frontend 35 passed, build OK). No /api/v1 break.
 
+### Session: shot-clock shooting splits (descriptive)
+
+Extended the contested-shooting feature with shot-clock splits from the same
+NBA tracking endpoint (ShotClockShooting): `shooting.contested_shooting` now also
+returns ordered `shot_clock` buckets (FG%/eFG%/frequency by shot-clock range,
+early -> late). Frontend adds a `ShotClockChart` analytical component and a
+"Shooting by shot clock" card in the Vs-Model view, labeled as descriptive NBA
+tracking splits (not a model input). No contract change (opaque JsonObject
+endpoint). Gates green: backend 141 passed; frontend lint 0, 35 tests, build OK.
+
 ### Session: contested-shooting view (descriptive)
 
 Built the honest, public-data version of #2 (a view, not a model feature):

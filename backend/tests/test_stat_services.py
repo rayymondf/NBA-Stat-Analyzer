@@ -264,6 +264,13 @@ def test_contested_shooting_buckets_sorted_and_rated(monkeypatch):
              "FG3M": 6, "FGA_FREQUENCY": 0.25, "FG_PCT": 0.45},
             {"CLOSE_DEF_DIST_RANGE": "4-6 Feet - Open", "FGA": 70, "FGM": 34,
              "FG3M": 14, "FGA_FREQUENCY": 0.25, "FG_PCT": 0.486},
+        ], "ShotClockShooting": [
+            {"SHOT_CLOCK_RANGE": "4-0 Very Late", "FGA": 40, "FGM": 14,
+             "FG3M": 4, "FGA_FREQUENCY": 0.13, "FG_PCT": 0.35},
+            {"SHOT_CLOCK_RANGE": "15-7 Average", "FGA": 120, "FGM": 60,
+             "FG3M": 20, "FGA_FREQUENCY": 0.39, "FG_PCT": 0.50},
+            {"SHOT_CLOCK_RANGE": "22-18 Very Early", "FGA": 30, "FGM": 18,
+             "FG3M": 2, "FGA_FREQUENCY": 0.10, "FG_PCT": 0.60},
         ]}
 
     monkeypatch.setattr(shooting.api, "player_pt_shots", fake_pt)
@@ -282,6 +289,11 @@ def test_contested_shooting_buckets_sorted_and_rated(monkeypatch):
     assert rating["confidence"] == "ok"
     assert "defensive" in rating["caveat"].lower()
     assert "not a defensive rating" in out["source_note"].lower()
+    # Shot-clock buckets present and ordered early -> late.
+    clock = out["shot_clock"]
+    assert [b["range"] for b in clock] == ["22-18 Very Early", "15-7 Average", "4-0 Very Late"]
+    assert clock[0]["efg_pct"] == round((18 + 0.5 * 2) / 30, 3)
+    assert clock[-1]["fg_pct"] == 0.35
 
 
 def test_contested_shooting_unavailable_when_no_rows(monkeypatch):

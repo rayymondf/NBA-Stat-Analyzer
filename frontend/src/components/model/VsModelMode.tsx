@@ -11,6 +11,7 @@ import AnalysisPeriod from "./AnalysisPeriod";
 import { useAnalysisPeriod } from "./useAnalysisPeriod";
 import ShotDifficultyExplainer from "./ShotDifficultyExplainer";
 import ContestedShootingChart from "./ContestedShootingChart";
+import ShotClockChart from "./ShotClockChart";
 
 function ShotSelectionCard({ playerId, name, filters }: { playerId: number; name?: string; filters: Filters }) {
   const [result, setResult] = useState<"all" | "made" | "missed">("all");
@@ -129,6 +130,16 @@ export default function VsModelMode() {
                   <p className="text-xs text-ink-muted leading-relaxed mt-3">{contested.data.source_note}</p>
                 </>
               : <p className="text-sm text-ink-muted">{contested.data?.reason ?? "Contested-shooting splits are unavailable for this period."}</p>}
+          </Card>
+          <Card>
+            <CardTitle>Shooting by shot clock</CardTitle>
+            {contested.isLoading ? <Skeleton className="h-40 rounded-lg" />
+              : contested.error ? <ErrorState message={contested.error.message} onRetry={() => void contested.refetch()} />
+              : contested.data?.available && contested.data.shot_clock.length ? <>
+                  <ShotClockChart buckets={contested.data.shot_clock} />
+                  <p className="text-xs text-ink-muted leading-relaxed mt-3">NBA tracking splits by time left on the shot clock — descriptive, not an input to the shot-quality model.</p>
+                </>
+              : <p className="text-sm text-ink-muted">Shot-clock splits are unavailable for this period.</p>}
           </Card>
           <Card><CardTitle>League reference distribution</CardTitle>
             {model.isLoading ? <Skeleton className="h-48" /> : model.error ? <ErrorState message={model.error.message} onRetry={() => void model.refetch()} /> : modelInfo?.delta_distribution?.length ? <DeltaHistogram distribution={modelInfo.delta_distribution} playerDelta={quality.delta} playerName={name} /> : <p className="text-sm text-ink-muted">League reference distribution unavailable.</p>}
