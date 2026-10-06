@@ -218,3 +218,57 @@ def test_log_mlflow_skips_registration_when_gate_fails(tmp_path, monkeypatch):
     # Run is recorded for history, but nothing is registered when the gate fails.
     registered = {model.name for model in client.search_registered_models()}
     assert "xfg-fail" not in registered
+
+
+def test_safe_incumbent_none_only_when_no_bundle():
+    """No incumbent provided -> None (caller uses the labeled naive baseline)."""
+    from app.pipeline import training
+
+    frame = pd.DataFrame({"GAME_DATE": ["20250101"]})
+    assert training._safe_incumbent_probability(None, frame, test_from="2026-01-01") is None
+    assert training._safe_incumbent_probability({}, frame, test_from="2026-01-01") is None
+
+
+def test_safe_incumbent_scores_eligible_bundle_via_trained_at(monkeypatch):
+    """An eligible incumbent that records only trained_at is still scored."""
+    from app.pipeline import training
+
+    class _Model:
+        def predict_proba(self, features):
+            n = len(features)
+            return np.column_stack([np.full(n, 0.4), np.full(n, 0.6)])
+
+    # Avoid depending on real feature engineering: build_features just passes through.
+    monkeypatch.setattr(training, "build_features", lambda frame, columns=None: frame)
+    bundle = {"model": _Model(), "feature_columns": ["x"],
+              "meta": {"trained_at": "2024-07-18T05:48:48+00:00"}}
+    frame = pd.DataFrame({"GAME_DATE": ["20260101", "20260102"]})
+    probs = training._safe_incumbent_probability(bundle, frame, test_from="2025-01-01")
+    assert probs is not None and list(probs) == [0.6, 0.6]
+
+
+def test_safe_incumbent_raises_when_ineligible_not_silent(monkeypatch):
+    """A provided-but-ineligible incumbent raises instead of silently going naive."""
+    from app.pipeline import training
+
+    monkeypatch.setattr(training, "build_features", lambda frame, columns=None: frame)
+    # training ends on/after the test fold start -> would leak -> loud error.
+    bundle = {"model": object(), "meta": {"trained_at": "2026-06-01T00:00:00+00:00"}}
+    frame = pd.DataFrame({"GAME_DATE": ["20260101"]})
+    with pytest.raises(training.IncumbentIncompatible, match=r"leak|eligib|before"):
+        training._safe_incumbent_probability(bundle, frame, test_from="2026-01-01")
+
+
+def test_safe_incumbent_raises_when_unscoreable_not_silent(monkeypatch):
+    """A provided incumbent that cannot score the current features raises loudly."""
+    from app.pipeline import training
+
+    class _BadModel:
+        def predict_proba(self, features):
+            raise KeyError("missing feature column 'angle'")
+
+    monkeypatch.setattr(training, "build_features", lambda frame, columns=None: frame)
+    bundle = {"model": _BadModel(), "meta": {"training_data_through": "2024-06-01"}}
+    frame = pd.DataFrame({"GAME_DATE": ["20260101"]})
+    with pytest.raises(training.IncumbentIncompatible, match=r"feature set|schema"):
+        training._safe_incumbent_probability(bundle, frame, test_from="2026-01-01")

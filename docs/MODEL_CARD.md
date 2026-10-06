@@ -54,14 +54,22 @@ ignored deployment data, not source-controlled release assets.
    slightly different probability scales, so player percentiles/shrinkage can be
    systematically off. This affects the percentile surface, not the gate. Next
    iteration: calibrate within each OOF fold.
-3. **`--incumbent` can silently fall back to the naive baseline.** When the
-   eligible incumbent cannot be scored on the current feature set, training
-   quietly reverts to the constant train-rate baseline instead of erroring. A
-   constant predictor is trivially perfectly calibrated, so the paired ECE delta
-   then fails the 0.005 tolerance regardless of how good the candidate is — which
-   is why the ECE criterion failed above. Next iteration: make the incumbent
-   comparison either succeed (re-featurize/evaluate v2 on the shared test fold)
-   or fail loudly, never silently degrade to a weaker baseline.
+3. **`--incumbent` silent fallback (fixed).** Training previously reverted to
+   the constant train-rate baseline whenever the incumbent could not be scored,
+   which hid that no real head-to-head happened and made the ECE criterion
+   unwinnable (a constant predictor is trivially perfectly calibrated).
+   `_safe_incumbent_probability` now returns the naive baseline only when no
+   incumbent is provided; a provided-but-unusable incumbent raises
+   `IncumbentIncompatible` with an actionable message, and eligibility now also
+   recognizes a bundle that records only `trained_at` (such as v2).
+
+   Running the fix surfaced a real constraint: v2's training data (through
+   mid-2026) overlaps this dataset's test fold (starts 2026-02-21), so scoring
+   v2 on it would leak test data - a clean v2-vs-v3 head-to-head is therefore
+   impossible on this dataset. A true comparison needs either a v2 trained
+   strictly before the new test period, or a dataset whose test fold postdates
+   v2's training. The earlier "gate failed on ECE vs naive" result was a symptom
+   of the silent fallback, not a verdict on v3 vs v2.
 
 ## Intended use
 

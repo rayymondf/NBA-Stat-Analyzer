@@ -97,10 +97,12 @@ defects (three of them worsen Ask AI responsiveness):
 - **xFG model is at a feature ceiling.** Location+type features cap make-
   probability prediction near Brier ~0.225 / AUC ~0.66. Beating v2 needs new
   signal, not more rows (see next iteration).
-- **`--incumbent` silent fallback (bug).** When v2 cannot be scored on the
-  current feature set, training silently reverts to the naive baseline instead
-  of a true head-to-head, which also makes the ECE gate criterion unwinnable.
-  Flagged in MODEL_CARD limitation 3.
+- **`--incumbent` silent fallback ? FIXED.** Training no longer silently
+  reverts to the naive baseline: a provided-but-unusable incumbent now raises
+  `IncumbentIncompatible` with an actionable message, and eligibility recognizes
+  v2's `trained_at`. This surfaced that v2's training overlaps this dataset's
+  test fold, so a clean v2-vs-v3 head-to-head needs a non-overlapping dataset or
+  an earlier-trained v2 (see MODEL_CARD limitation 3).
 - **OOF prior / calibration mismatch** in the player-percentile surface
   (MODEL_CARD limitations 1–2) — cosmetic to users, not a gate issue.
 - **`pipeline.yml`** cannot pass in ordinary CI (needs live ingestion + secrets);

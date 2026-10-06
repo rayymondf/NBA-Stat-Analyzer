@@ -479,22 +479,74 @@ def _feature_importance(
     ]
 
 
+class IncumbentIncompatible(RuntimeError):
+    """A provided incumbent could not be used for a true head-to-head comparison.
+
+    Raised instead of silently degrading to the constant naive baseline, which
+    would both hide that no real comparison happened and make the ECE gate
+    criterion unwinnable (a constant predictor is trivially perfectly calibrated).
+    """
+
+
+def _incumbent_training_through(meta: dict[str, Any]) -> str | None:
+    """Date (YYYY-MM-DD) the incumbent's training data ended, for eligibility.
+
+    Prefer the explicit ``training_data_through``; fall back to the date part of
+    ``trained_at`` so older bundles (e.g. v2, which records only ``trained_at``)
+    are still recognized as temporally eligible instead of being silently
+    skipped.
+    """
+    through = meta.get("training_data_through")
+    if through:
+        return str(through)[:10]
+    trained_at = meta.get("trained_at")
+    if trained_at:
+        return str(trained_at)[:10]
+    return None
+
+
 def _safe_incumbent_probability(
     bundle: dict[str, Any] | None,
     frame: pd.DataFrame,
     *,
     test_from: str,
 ) -> np.ndarray | None:
+    """Score the incumbent on the shared test fold for a true baseline comparison.
+
+    Returns ``None`` only when no incumbent bundle was provided (then the caller
+    legitimately uses the naive constant baseline). When a bundle *is* provided
+    but cannot produce an eligible, comparable score, this raises
+    ``IncumbentIncompatible`` rather than silently falling back to naive.
+    """
     if not bundle or "model" not in bundle:
         return None
-    training_through = bundle.get("meta", {}).get("training_data_through")
-    if not training_through or str(training_through) >= test_from:
-        return None
+    meta = bundle.get("meta", {})
+    training_through = _incumbent_training_through(meta)
+    if training_through is None:
+        raise IncumbentIncompatible(
+            "The incumbent has no training_data_through or trained_at date, so its "
+            "temporal eligibility against the new test fold cannot be verified. "
+            "Record a training end date on the incumbent, or omit --incumbent to "
+            "compare against the labeled naive baseline."
+        )
+    if training_through >= test_from:
+        raise IncumbentIncompatible(
+            f"The incumbent's training data ends {training_through}, on or after the "
+            f"new test fold start {test_from}; scoring it would leak test data. Use "
+            "an incumbent trained strictly before the new test period, or omit "
+            "--incumbent to compare against the labeled naive baseline."
+        )
     try:
         columns = bundle.get("feature_columns") or FEATURE_COLUMNS
         return bundle["model"].predict_proba(build_features(frame, columns))[:, 1]
-    except (KeyError, ValueError, TypeError):
-        return None
+    except (KeyError, ValueError, TypeError) as err:
+        raise IncumbentIncompatible(
+            "The incumbent could not be scored on the current feature set "
+            f"({type(err).__name__}: {err}). Its feature schema likely differs from "
+            "the current model. Retrain/export the incumbent on the current feature "
+            "columns for a true head-to-head, or omit --incumbent to compare against "
+            "the labeled naive baseline."
+        ) from err
 
 
 def rolling_oof_predictions(
