@@ -14,6 +14,9 @@ export; frontend: oxlint, vitest, build) before commit.
   2025-26, **regular season + playoffs** (no preseason). See [DATA_CARD](DATA_CARD.md).
 - **CI/CD:** backend and frontend gates pass locally. `pipeline.yml` is
   dispatch/schedule-only and depends on live ingestion + optional secrets.
+- **Container:** Dockerfile/compose statically reviewed and sound (multi-stage,
+  non-root, model-less health check). Not executed here — Docker is not installed
+  on the dev machine; run `docker compose up --build` where Docker is available.
 - **Agents/skills:** task-focused agents in `.kiro/agents/`, coordinated by the
   `.kiro/skills/nba-agent-workflow` skill.
 
@@ -107,6 +110,39 @@ defects (three of them worsen Ask AI responsiveness):
   (MODEL_CARD limitations 1–2) — cosmetic to users, not a gate issue.
 - **`pipeline.yml`** cannot pass in ordinary CI (needs live ingestion + secrets);
   it is a scheduled/dispatch job by design.
+
+## Post-revamp checks
+
+### Docker image check (static)
+
+Docker is not installed on the development machine, so the image could not be
+built or run here. A full static review of `Dockerfile`, `docker-compose.yml`,
+and `.dockerignore` against the CI container job passed on every point:
+
+- Multi-stage build: Node 24 frontend build -> `python:3.12-slim` runtime, uv
+  0.8.22 pinned, `uv sync --locked --no-dev --extra inference`.
+- Runs **non-root** (`useradd app` + `USER app`; `data/` chowned to `app`).
+- `HEALTHCHECK` hits `/health/live`, which returns `{"status":"ok"}` with no
+  dependencies or model. `/health/ready` passes without a model because
+  `require_model` defaults to False.
+- Runtime imports are inference-safe: no top-level `shap`/`mlflow`/`optuna`, and
+  `boto3` is imported lazily inside a function, so `app.main:app` starts with
+  only base deps + the `inference` extra (xgboost).
+- No baked model or secrets: `.dockerignore` excludes `backend/.env`,
+  `data/models`, raw/processed/manifests, and the sqlite cache.
+
+**To verify live where Docker is available:**
+
+```bash
+docker compose up --build         # or: docker build -t nba:ci .
+curl -f http://127.0.0.1:8000/health/live
+curl -f http://127.0.0.1:8000/health/ready
+```
+
+This mirrors the `container` job in `.github/workflows/ci.yml`. A deployed
+container has no model baked in by design; configure the SHA-pinned artifact
+bootstrap (see DEPLOYMENT.md) or it serves without the xFG model (readiness
+still passes).
 
 ## Next iteration
 
