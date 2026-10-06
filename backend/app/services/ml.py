@@ -520,3 +520,47 @@ def shot_quality(player_id: int, season: str | None = None,
             "of model or tracking-data uncertainty."
         ),
     }
+
+
+def shot_quality_season_splits(player_id: int, season: str | None = None) -> dict:
+    """Shot quality (xFG) for a player split by season type: regular season vs
+    playoffs.
+
+    Reuses :func:`shot_quality` for each season type and presents them side by
+    side with a comparison, so a user can see whether a player's shot-making
+    holds up (or changes) in the playoffs. Playoffs are available only for teams
+    that reached the postseason; when a split has no shots it is reported as
+    unavailable rather than fabricated.
+
+    This is descriptive: it compares the *same* model's estimates across the two
+    season types. It does not change the model or its features.
+    """
+    season = season or current_season()
+    regular = shot_quality(player_id, season, "Regular Season")
+    playoffs = shot_quality(player_id, season, "Playoffs")
+
+    comparison: dict | None = None
+    if regular.get("available") and playoffs.get("available"):
+        # Positive playoff_shift => the player's make-vs-expected delta is higher
+        # in the playoffs than the regular season.
+        reg_delta = float(regular["delta"])
+        po_delta = float(playoffs["delta"])
+        comparison = {
+            "regular_season_delta": round(reg_delta, 3),
+            "playoff_delta": round(po_delta, 3),
+            "playoff_shift": round(po_delta - reg_delta, 3),
+            "regular_season_shots": regular.get("shots"),
+            "playoff_shots": playoffs.get("shots"),
+            "note": (
+                "Playoff samples are small; treat the shift as directional, not "
+                "definitive. Both figures are the same model's shot-location "
+                "estimate, not a contest- or defender-adjusted measure."
+            ),
+        }
+
+    return {
+        "season": season,
+        "regular_season": regular,
+        "playoffs": playoffs,
+        "comparison": comparison,
+    }

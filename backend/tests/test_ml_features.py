@@ -196,3 +196,42 @@ def test_shot_difficulty_explainer_unavailable_without_model(monkeypatch):
     result = ml.shot_difficulty_explainer(1, "2025-26")
     assert result["available"] is False
     assert result["reason"]
+
+
+def test_shot_quality_season_splits_composes_both_and_compares(monkeypatch):
+    calls = []
+
+    def fake_shot_quality(player_id, season, season_type):
+        calls.append(season_type)
+        base = {"Regular Season": 0.02, "Playoffs": 0.05}[season_type]
+        shots = {"Regular Season": 300, "Playoffs": 40}[season_type]
+        return {"available": True, "season": season, "season_type": season_type,
+                "shots": shots, "delta": base, "expected_efg": 0.52,
+                "actual_efg": 0.52 + base, "zones": []}
+
+    monkeypatch.setattr(ml, "shot_quality", fake_shot_quality)
+    out = ml.shot_quality_season_splits(1, "2025-26")
+
+    assert calls == ["Regular Season", "Playoffs"]
+    assert out["regular_season"]["season_type"] == "Regular Season"
+    assert out["playoffs"]["season_type"] == "Playoffs"
+    comp = out["comparison"]
+    assert comp["regular_season_delta"] == 0.02
+    assert comp["playoff_delta"] == 0.05
+    assert comp["playoff_shift"] == 0.03
+    assert comp["regular_season_shots"] == 300
+    assert comp["playoff_shots"] == 40
+
+
+def test_shot_quality_season_splits_no_comparison_when_playoffs_unavailable(monkeypatch):
+    def fake_shot_quality(player_id, season, season_type):
+        if season_type == "Playoffs":
+            return {"available": False, "reason": "No shots for this player in 2025-26."}
+        return {"available": True, "season": season, "season_type": season_type,
+                "shots": 300, "delta": 0.02, "zones": []}
+
+    monkeypatch.setattr(ml, "shot_quality", fake_shot_quality)
+    out = ml.shot_quality_season_splits(1, "2025-26")
+    assert out["regular_season"]["available"] is True
+    assert out["playoffs"]["available"] is False
+    assert out["comparison"] is None

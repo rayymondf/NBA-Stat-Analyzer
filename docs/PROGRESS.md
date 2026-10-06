@@ -144,6 +144,17 @@ container has no model baked in by design; configure the SHA-pinned artifact
 bootstrap (see DEPLOYMENT.md) or it serves without the xFG model (readiness
 still passes).
 
+### Session: #2 research + #4 playoff splits
+
+- **#2 (contest/shot-clock features): researched, not built.** Verdict in
+  docs/RESEARCH_SHOT_CONTEXT.md: not feasible at shot level from public data
+  (public API = aggregate buckets only; one stale 2014-15 public shot-level set;
+  current tracking is licensed). The model stays an honest location+type model.
+- **#4 (playoff vs regular-season shot-quality splits): built and verified.**
+  Backend service + additive endpoint + 2 tests; frontend card with
+  loading/error/empty states; types regenerated. Gates green (backend 138
+  passed; frontend 35 passed, build OK). No /api/v1 break.
+
 ## Next iteration
 
 1. **Fix the incumbent comparison** so v3-vs-v2 is a true shared-test-fold
@@ -159,7 +170,10 @@ still passes).
    from the aggregate buckets; or license a paid feed for shot-level contest.
 3. **Calibrate within each OOF fold** and derive the player prior only from
    pre-tuning windows, so the percentile surface matches production probabilities.
-4. **Season-type as a modeling or reporting dimension** now that playoffs are in
-   the dataset (e.g. playoff vs regular-season shot-quality splits).
+4. **Season-type reporting dimension (DONE).** Playoff vs regular-season
+   shot-quality splits are now computed (`ml.shot_quality_season_splits`), served
+   additively at `GET /players/{id}/shot-quality-splits`, and surfaced in the
+   Vs-Model shot-quality view as a "Playoffs vs regular season" card with the
+   per-season deltas and the playoff shift.
 5. Optional: a small frontend pass (lazy the GameDetail chart within the page
    shell) only if measurement shows it helps.

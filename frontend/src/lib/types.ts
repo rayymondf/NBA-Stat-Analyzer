@@ -133,6 +133,22 @@ export interface ShotQualityAvailable {
 }
 export type ShotQuality = ShotQualityAvailable | ShotQualityUnavailable;
 
+export interface ShotQualityComparison {
+  regular_season_delta: number;
+  playoff_delta: number;
+  playoff_shift: number;
+  regular_season_shots: number | null;
+  playoff_shots: number | null;
+  note: string;
+}
+
+export interface ShotQualitySplits {
+  season: string;
+  regular_season: ShotQuality;
+  playoffs: ShotQuality;
+  comparison: ShotQualityComparison | null;
+}
+
 export interface Efficiency {
   season: string;
   season_type: string;

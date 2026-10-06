@@ -48,6 +48,11 @@ export default function VsModelMode() {
     queryKey: ["shotQuality", playerId, filters.season, filters.season_type],
     queryFn: () => api.shotQuality(playerId!, filters), enabled: !!playerId, staleTime: 30 * 60 * 1000,
   });
+  const splits = useQuery({
+    queryKey: ["shotQualitySplits", playerId, filters.season],
+    queryFn: () => api.shotQualitySplits(playerId!, { season: filters.season }),
+    enabled: !!playerId, staleTime: 30 * 60 * 1000,
+  });
   const model = useQuery({ queryKey: ["modelInfo"], queryFn: api.modelInfo, staleTime: 30 * 60 * 1000 });
   const modelInfo = model.data?.available ? model.data : null;
   const bio = summary.data;
@@ -88,6 +93,26 @@ export default function VsModelMode() {
             <p className="text-xs text-ink-muted mt-2">Model {quality.model.model_version ?? "version unavailable"} · Dataset {quality.model.dataset_version ?? "version unavailable"}</p>
           </Card>
           <Card><CardTitle>Zone by zone: actual vs expected</CardTitle>{quality.zones.length ? <ZoneDeltaBars zones={quality.zones} /> : <p className="text-sm text-ink-muted">Zone estimates unavailable for this period.</p>}</Card>
+          <Card>
+            <CardTitle tip="XFG">Playoffs vs regular season</CardTitle>
+            {splits.isLoading ? <Skeleton className="h-28 rounded-lg" />
+              : splits.error ? <ErrorState message={splits.error.message} onRetry={() => void splits.refetch()} />
+              : splits.data?.comparison ? (() => {
+                  const c = splits.data.comparison;
+                  const shift = c.playoff_shift;
+                  return (
+                    <div>
+                      <div className="grid sm:grid-cols-3 gap-5">
+                        <div><div className="text-xs text-ink-muted mb-2">Regular season difference</div><div className="text-2xl font-display font-bold tnum" style={{ color: c.regular_season_delta >= 0 ? "var(--good)" : "var(--critical)" }}>{c.regular_season_delta > 0 ? "+" : ""}{(c.regular_season_delta * 100).toFixed(1)} <span className="text-sm">pp</span></div><p className="text-xs text-ink-muted mt-1">{c.regular_season_shots?.toLocaleString() ?? "—"} shots</p></div>
+                        <div><div className="text-xs text-ink-muted mb-2">Playoff difference</div><div className="text-2xl font-display font-bold tnum" style={{ color: c.playoff_delta >= 0 ? "var(--good)" : "var(--critical)" }}>{c.playoff_delta > 0 ? "+" : ""}{(c.playoff_delta * 100).toFixed(1)} <span className="text-sm">pp</span></div><p className="text-xs text-ink-muted mt-1">{c.playoff_shots?.toLocaleString() ?? "—"} shots</p></div>
+                        <div><div className="text-xs text-ink-muted mb-2">Playoff shift</div><div className="text-2xl font-display font-bold tnum" style={{ color: shift >= 0 ? "var(--good)" : "var(--critical)" }}>{shift > 0 ? "+" : ""}{(shift * 100).toFixed(1)} <span className="text-sm">pp</span></div><p className="text-xs text-ink-muted mt-1">{shift >= 0 ? "better" : "worse"} vs regular season</p></div>
+                      </div>
+                      <p className="text-xs text-ink-muted leading-relaxed mt-3">{c.note}</p>
+                    </div>
+                  );
+                })()
+              : <p className="text-sm text-ink-muted">Playoff comparison unavailable — this player has no playoff shots in {splits.data?.season ?? "this season"}.</p>}
+          </Card>
           <ShotSelectionCard playerId={playerId} name={name} filters={filters} />
           <Card><CardTitle>League reference distribution</CardTitle>
             {model.isLoading ? <Skeleton className="h-48" /> : model.error ? <ErrorState message={model.error.message} onRetry={() => void model.refetch()} /> : modelInfo?.delta_distribution?.length ? <DeltaHistogram distribution={modelInfo.delta_distribution} playerDelta={quality.delta} playerName={name} /> : <p className="text-sm text-ink-muted">League reference distribution unavailable.</p>}

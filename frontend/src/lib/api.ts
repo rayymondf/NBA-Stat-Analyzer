@@ -1,7 +1,7 @@
 import type {
   AiReport, Career, Comparison, Efficiency, Fouls, GameDetail, GameLog,
   Impact, Investigation, Leader, ListedGame, ModelInfo, Overview, Playtime,
-  PlayerSummary, ProblemDetails, ShotProfile, ShotQuality, ShotExplainerResponse,
+  PlayerSummary, ProblemDetails, ShotProfile, ShotQuality, ShotQualitySplits, ShotExplainerResponse,
   SimilarPlayers, Trends,
 } from "./types";
 
@@ -104,6 +104,7 @@ export const api = {
   overview: (id: number, p?: Filters) => get<Overview>(`/players/${id}/overview`, p),
   shooting: (id: number, p?: Record<string, unknown>) => get<ShotProfile>(`/players/${id}/shooting`, p),
   shotQuality: (id: number, p?: Filters) => get<ShotQuality>(`/players/${id}/shot-quality`, p),
+  shotQualitySplits: (id: number, p?: Filters) => get<ShotQualitySplits>(`/players/${id}/shot-quality-splits`, p),
   shotExplainer: (id: number, p?: Filters) =>
     get<ShotExplainerResponse>(`/ml/players/${id}/shot-explainer`, p),
   efficiency: (id: number, p?: Filters) => get<Efficiency>(`/players/${id}/efficiency`, p),

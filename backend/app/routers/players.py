@@ -92,6 +92,12 @@ def shot_quality(player_id: PlayerId, season: Season | None = None,
     return ml.shot_quality(player_id, season, str(season_type))
 
 
+@router.get("/{player_id}/shot-quality-splits", response_model=JsonObject)
+def shot_quality_splits(player_id: PlayerId, season: Season | None = None):
+    """Shot quality split by season type: regular season vs playoffs."""
+    return ml.shot_quality_season_splits(player_id, season)
+
+
 @router.get("/{player_id}/efficiency", response_model=JsonObject)
 def efficiency_dashboard(player_id: PlayerId, season: Season | None = None,
                          season_type: SeasonType = SeasonType.REGULAR):
