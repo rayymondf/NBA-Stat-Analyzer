@@ -226,6 +226,7 @@ guide and tool list.
 
 - [`Architecture`](docs/ARCHITECTURE.md)
 - [`Progress log`](docs/PROGRESS.md)
+- [`Shot-context research (#2)`](docs/RESEARCH_SHOT_CONTEXT.md)
 - [`MCP server`](backend/mcp_servers/README.md)
 - [`Model card`](docs/MODEL_CARD.md)
 - [`Data card`](docs/DATA_CARD.md)
