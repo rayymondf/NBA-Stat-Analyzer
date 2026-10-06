@@ -32,7 +32,7 @@ export default function PlayerProfile() {
   const section = pick<SectionId>(params.get("tab"), SECTIONS.map((item) => item.id), "overview");
   const requestedSeason = params.get("season");
   const season = meta?.seasons.includes(requestedSeason ?? "") ? requestedSeason! : undefined;
-  const seasonType = pick(params.get("season_type"), ["Pre Season", "Regular Season", "Playoffs"], "Regular Season");
+  const seasonType = pick(params.get("season_type"), ["Regular Season", "Playoffs"], "Regular Season");
   const filters = useMemo<ProfileFilters>(() => ({
     season, season_type: seasonType, perMode: pick(params.get("per_mode"), PER_MODES, "per_game"),
     location: pick(params.get("location"), ["home", "away"], "") || undefined,

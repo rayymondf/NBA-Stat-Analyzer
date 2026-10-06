@@ -155,6 +155,24 @@ still passes).
   loading/error/empty states; types regenerated. Gates green (backend 138
   passed; frontend 35 passed, build OK). No /api/v1 break.
 
+### Session: Gemini failure fix + remove Preseason from player lookup
+
+- **Gemini "could not complete the request" — root-caused and fixed.** The
+  trigger is Google returning 503 UNAVAILABLE (transient overload). The real
+  masked bug: on a 503 inside the SDK function-calling loop, google-genai's
+  internal retry fires on an already-closed httpx client and raises
+  RuntimeError("Cannot send a request, as the client has been closed"). That is
+  neither ClientError nor ServerError, so it fell through the candidate loop
+  uncaught and the router's catch-all flattened it to the generic message. The
+  key/model were fine. Fix: the orchestrator candidate loop now catches the
+  closed-client RuntimeError (and any unexpected SDK error) and tries the next
+  candidate, then maps an all-failed run to an actionable AiRateLimited
+  ("overloaded, try again"). Test added. 142 backend tests pass.
+- **Removed the Preseason option from player lookup.** FilterBar no longer
+  offers Preseason; PlayerProfile falls back to Regular Season if a URL still
+  requests it. Backend SeasonType.PRE support is untouched (Games schedule view
+  still allows it). Stale test rewritten to assert the fallback.
+
 ### Session: shot-clock shooting splits (descriptive)
 
 Extended the contested-shooting feature with shot-clock splits from the same

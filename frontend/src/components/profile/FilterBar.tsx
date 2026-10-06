@@ -44,7 +44,6 @@ export default function FilterBar({ filters, onChange, showRate = false, showSpl
 
         <Segmented
           options={[
-            { value: "Pre Season", label: "Preseason" },
             { value: "Regular Season", label: "Regular" },
             { value: "Playoffs", label: "Playoffs" },
           ]}

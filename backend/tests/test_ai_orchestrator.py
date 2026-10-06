@@ -168,5 +168,20 @@ class OrchestratorTests(unittest.TestCase):
             assert attempted.wait(timeout=5)
 
 
+    @patch("app.ai.orchestrator._store_report")
+    @patch("app.ai.orchestrator._cached_report", return_value=None)
+    def test_closed_client_runtimeerror_maps_to_rate_limited(self, _cached, _store):
+        # The google-genai SDK can raise "Cannot send a request, as the client
+        # has been closed" when its internal retry fires after a transient 5xx.
+        # That must surface as an actionable AiRateLimited (overloaded) message,
+        # never propagate raw into the router's generic catch-all.
+        from google.genai import errors as genai_errors  # noqa: F401 (ensure importable)
+        with patch("app.ai.orchestrator._client") as client:
+            client.return_value.models.generate_content.side_effect = RuntimeError(
+                "Cannot send a request, as the client has been closed.")
+            with self.assertRaises(orchestrator.AiRateLimited):
+                orchestrator.ask("Is this player efficient?", "player", {"player_id": 23})
+
+
 if __name__ == "__main__":
     unittest.main()

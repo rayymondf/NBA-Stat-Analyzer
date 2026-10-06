@@ -463,6 +463,19 @@ def _generate_report(question: str, mode: str, context: dict | None,
         except errors.ServerError as err:  # 5xx: overloaded → try next model
             last_err = err
             continue
+        except RuntimeError as err:
+            # The google-genai SDK can raise "Cannot send a request, as the
+            # client has been closed" when its internal retry fires after an
+            # upstream 5xx inside the function-calling loop. The underlying
+            # cause is a transient Gemini outage; try the next candidate with a
+            # fresh client rather than letting this mask the real reason.
+            if "has been closed" in str(err):
+                last_err = err
+                continue
+            raise
+        except Exception as err:  # unknown SDK failure; try fallback, then surface honestly
+            last_err = err
+            continue
 
     if response is None:
         err_text = str(last_err)
@@ -478,7 +491,7 @@ def _generate_report(question: str, mode: str, context: dict | None,
         raise AiRateLimited(
             "Google's AI servers are overloaded right now (temporary, their "
             "side). Wait a minute and ask again; the app automatically tries "
-            "backup models.")
+            "backup models.") from last_err
 
     report = _extract_json(_response_text(response))
     report.setdefault("key_findings", [])
