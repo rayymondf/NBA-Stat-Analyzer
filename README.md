@@ -32,10 +32,12 @@ lineage, observability, container delivery, and accessible product UX.
 - Pinned Python/Node dependencies, CI, scheduled retraining, GHCR publishing,
   multi-stage non-root Docker image, Compose, and a Render Blueprint.
 
-> Current artifact status: the local ignored artifact is xFG **v2** (657,387
-> shots; held-out Brier 0.2244, AUC 0.662). The v3 pipeline is implemented and
-> gated, but a v3 artifact is intentionally not claimed as deployed until a
-> fresh ID-complete ingestion passes the recorded promotion rules.
+> Current artifact status: the deployed artifact is xFG **v2** (657,387 shots;
+> held-out Brier 0.2244, AUC 0.662). A v3 candidate was trained on a fresh 700k
+> regular-season + playoffs dataset (`shots-v1-426fd715aa4e`) and evaluated
+> against the recorded gate; it did **not** beat v2 and was **not** promoted, so
+> v2 remains deployed. See [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md) and
+> [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Run it
 

@@ -87,7 +87,7 @@ every tab.
 | Control | Where it applies |
 |---|---|
 | Season | Hero and all profile tabs |
-| Preseason / Regular season / Playoffs | Hero and all profile tabs |
+| Regular season / Playoffs | Hero and all profile tabs (preseason removed from player lookup) |
 | Per game / Per 36 / Per 75 / Per 100 | Overview counting-stat tiles |
 | Home/away | Overview and Game Log |
 | Wins/losses | Overview and Game Log |

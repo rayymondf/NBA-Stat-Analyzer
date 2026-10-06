@@ -5,18 +5,24 @@ evidence), what remains, and what the next iteration should pick up. Each slice
 was verified against the local gate (backend: ruff, mypy, pytest, OpenAPI
 export; frontend: oxlint, vitest, build) before commit.
 
-## Honest status at a glance
+## Honest status at a glance (as of 2026-10-06)
 
 - **Deployed xFG model:** v2 (657,387 shots; held-out Brier 0.2244, AUC 0.662).
-  A v3 candidate trained on a newer 700k dataset did **not** beat v2 and was
-  **not** promoted. See [MODEL_CARD](MODEL_CARD.md).
+  A v3 candidate on the newer 700k dataset did **not** beat v2 and was **not**
+  promoted (gate working as designed). See [MODEL_CARD](MODEL_CARD.md).
 - **Current dataset:** `shots-v1-426fd715aa4e` — 700,077 shots, 2023-24 through
   2025-26, **regular season + playoffs** (no preseason). See [DATA_CARD](DATA_CARD.md).
-- **CI/CD:** backend and frontend gates pass locally. `pipeline.yml` is
-  dispatch/schedule-only and depends on live ingestion + optional secrets.
-- **Container:** Dockerfile/compose statically reviewed and sound (multi-stage,
-  non-root, model-less health check). Not executed here — Docker is not installed
-  on the dev machine; run `docker compose up --build` where Docker is available.
+- **Backend + frontend gates:** green locally (backend ruff/mypy/pytest 142
+  passed; frontend oxlint 0 warnings, 35 tests, build OK). All work pushed to
+  `origin/main`.
+- **Ask AI (Gemini):** works when Google's API is healthy; failures now surface
+  an actionable "overloaded, try again" message instead of a generic error.
+  Subject to Google-side 503 outages (their capacity, transient).
+- **Descriptive tracking views:** shot quality by closest-defender distance and
+  by shot clock, plus playoff-vs-regular shot-quality splits, all on the
+  `/model` (Vs-Model) view and labeled "not a model input."
+- **Container:** Dockerfile/compose statically reviewed and sound; not executed
+  here (Docker not installed on the dev machine).
 - **Agents/skills:** task-focused agents in `.kiro/agents/`, coordinated by the
   `.kiro/skills/nba-agent-workflow` skill.
 
@@ -95,21 +101,71 @@ defects (three of them worsen Ask AI responsiveness):
   AGENTS.md (removed the retired Codex roster references; current `.kiro` agents
   and skill), and added this progress log.
 
-## What remains / known gaps
+## Current errors & known issues
 
-- **xFG model is at a feature ceiling.** Location+type features cap make-
-  probability prediction near Brier ~0.225 / AUC ~0.66. Beating v2 needs new
-  signal, not more rows (see next iteration).
-- **`--incumbent` silent fallback ? FIXED.** Training no longer silently
-  reverts to the naive baseline: a provided-but-unusable incumbent now raises
-  `IncumbentIncompatible` with an actionable message, and eligibility recognizes
-  v2's `trained_at`. This surfaced that v2's training overlaps this dataset's
-  test fold, so a clean v2-vs-v3 head-to-head needs a non-overlapping dataset or
-  an earlier-trained v2 (see MODEL_CARD limitation 3).
-- **OOF prior / calibration mismatch** in the player-percentile surface
-  (MODEL_CARD limitations 1–2) — cosmetic to users, not a gate issue.
-- **`pipeline.yml`** cannot pass in ordinary CI (needs live ingestion + secrets);
-  it is a scheduled/dispatch job by design.
+- **Ask AI depends on Google's Gemini uptime.** When Google returns 503
+  UNAVAILABLE (transient overload on their side) Ask AI cannot answer; the app
+  now shows an actionable "overloaded, try again" message and auto-tries a
+  backup model, but it cannot manufacture capacity Google is not giving. Not a
+  code defect — clears on its own, usually within minutes.
+- **xFG is at a feature ceiling.** Location + shot-type features cap make-
+  probability prediction near Brier ~0.225 / AUC ~0.66. More rows do not help
+  (Slice 5 confirmed); beating v2 needs new signal the model does not have.
+- **A clean v2-vs-v3 comparison is impossible on the current dataset.** v2's
+  training data (through mid-2026) overlaps this dataset's test fold (starts
+  2026-02-21), so scoring v2 would leak test data. The pipeline now fails loudly
+  on this instead of silently using a naive baseline. A true head-to-head needs
+  a dataset whose test fold postdates v2's training, or an earlier-cutoff v2.
+- **Player-percentile surface is slightly imprecise (cosmetic).** The player
+  prior is derived partly from the model-selection fold and from uncalibrated
+  OOF probabilities, so the displayed percentile can be a touch off. Does not
+  affect the promotion gate. See MODEL_CARD limitations 1-2.
+- **`pipeline.yml` cannot pass in ordinary CI.** It is a scheduled/dispatch-only
+  job needing live NBA.com ingestion + optional secrets — by design, not a bug.
+- **Docker not verified live.** The image was only statically reviewed because
+  Docker is not installed on the dev machine; run `docker compose up --build`
+  where Docker is available to confirm.
+
+### Resolved this effort (for history)
+- CI red (stale committed OpenAPI/TS contract) — fixed (Slice 1).
+- AI budget lockout, serial request pile-up, silent starter-filter drop, AiMode
+  wrong-turn keys — fixed (Slice 2).
+- Ingestion memory blow-up + slow resume re-hashing — fixed (Slice 3).
+- Ingestion missing playoffs — fixed (Slice 4).
+- `--incumbent` silent naive fallback — fixed (fails loudly now).
+- Gemini generic "could not complete" masking a closed-client RuntimeError —
+  fixed (actionable message + working fallback).
+
+## Future goals
+
+Highest-value first; each is scoped against the honest data constraints.
+
+1. **Earn a real v3 model.** Two prerequisites, in order:
+   (a) produce a leak-free v2-vs-v3 comparison (train on a dataset whose test
+   fold postdates v2's training, or export an earlier-cutoff v2); and
+   (b) add predictive signal the model lacks. Per
+   [RESEARCH_SHOT_CONTEXT](RESEARCH_SHOT_CONTEXT.md), per-shot contest/shot-clock
+   is NOT available from public data (aggregate buckets only; current tracking is
+   licensed), so realistic public-data signal is limited — licensing a tracking
+   feed (Sportradar / Second Spectrum) is the only path to shot-level contest.
+2. **Calibrate within each OOF fold** and derive the player prior only from
+   pre-tuning windows, so the displayed percentile matches production
+   probabilities (fixes MODEL_CARD limitations 1-2).
+3. **Expand the descriptive tracking views.** The same `playerdashptshots`
+   endpoint also exposes dribbles and touch-time buckets — add those as
+   descriptive views alongside defender-distance and shot-clock, same pattern.
+4. **Optionally surface the contested/shot-clock views on the player profile**,
+   not only the Vs-Model page, if users expect them there.
+5. **Verify + deploy the container.** Build and health-check the image where
+   Docker is available, then wire the SHA-pinned model bootstrap for a real
+   deployment (see DEPLOYMENT.md).
+6. **Auto-retry affordance for Ask AI 503s** in the UI (brief backoff + retry)
+   so transient Google outages are less jarring.
+
+## Session history
+
+The dated sections below are the chronological record of each change for
+continuity; the summaries above are the authoritative current state.
 
 ## Post-revamp checks
 
@@ -202,26 +258,3 @@ Built the honest, public-data version of #2 (a view, not a model feature):
   input and not a defensive rating**" in both the API `source_note` and the UI.
   This is the ceiling of what public data allows for contest (per #2 research:
   aggregate buckets only, no per-shot contest, no shot-level model feature).
-
-## Next iteration
-
-1. **Fix the incumbent comparison** so v3-vs-v2 is a true shared-test-fold
-   head-to-head (re-featurize/evaluate v2) or fails loudly — never silent naive
-   fallback.
-2. **Add predictive signal** the model lacks (defender distance / contest /
-   shot-clock). RESEARCHED - not feasible at shot level from public data (see
-   docs/RESEARCH_SHOT_CONTEXT.md): the public NBA API exposes these only as
-   per-player aggregate buckets with no GAME_ID to join to shots; the one
-   public shot-level set is a stale 2014-15 leak; current tracking (Second
-   Spectrum / Sportradar) is licensed/paid. Options: keep the honest
-   location+type model; add a descriptive (non-model) contested-shooting view
-   from the aggregate buckets; or license a paid feed for shot-level contest.
-3. **Calibrate within each OOF fold** and derive the player prior only from
-   pre-tuning windows, so the percentile surface matches production probabilities.
-4. **Season-type reporting dimension (DONE).** Playoff vs regular-season
-   shot-quality splits are now computed (`ml.shot_quality_season_splits`), served
-   additively at `GET /players/{id}/shot-quality-splits`, and surfaced in the
-   Vs-Model shot-quality view as a "Playoffs vs regular season" card with the
-   per-season deltas and the playoff shift.
-5. Optional: a small frontend pass (lazy the GameDetail chart within the page
-   shell) only if measurement shows it helps.
